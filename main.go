@@ -1,16 +1,24 @@
 package main
 
 import (
-    "net/http"
-    "github.com/rs/cors"
+	"net/http"
+	"user/server/db"
+	"user/server/handlers"
+	"github.com/rs/cors"
 )
 
 func main() {
-    DbConnect()
+    db := db.DbConnect()
+
     mux := http.NewServeMux()
 
-    mux.HandleFunc("/image", ImageHandler)
-    mux.HandleFunc("/auth", AuthHandler)
+    mux.HandleFunc("/image", handlers.ImageHandler)
+
+    authHandlerWrapper := func(w http.ResponseWriter, r *http.Request) {
+        handlers.AuthHandler(db, w, r)
+    }
+    
+    mux.HandleFunc("/auth", authHandlerWrapper)
 
     handler := cors.Default().Handler(mux)
     http.ListenAndServe(":8080", handler)
