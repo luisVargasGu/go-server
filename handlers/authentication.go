@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 )
 
@@ -33,6 +34,12 @@ func AuthHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	credCheck := compareHashedPasswords(creds.Password)
+	if !credCheck {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
 	userID, err := authenticateUser(db, creds.Username, creds.Password)
 	if err == nil {
 		response := AuthResponse{
@@ -53,7 +60,8 @@ func AuthHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 func authenticateUser(db *sql.DB, username, password string) (int, error) {
 	var userID int
 
-	err := db.QueryRow("SELECT id FROM Users WHERE username = $1 AND password_hash = $2", username, password).Scan(&userID)
+	hashedPassword := hashPassword(password)
+	err := db.QueryRow("SELECT id FROM Users WHERE username = $1 AND password_hash = $2", username, hashedPassword).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return 0, err // User not found
 	} else if err != nil {
@@ -62,4 +70,52 @@ func authenticateUser(db *sql.DB, username, password string) (int, error) {
 	}
 
 	return userID, nil
+}
+
+func RegisterHanrler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	var user Credentials
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+	hashedPassword := hashPassword(user.Password)
+	// Store user information in your database
+	_, err = registerUser(db, user.Username, hashedPassword)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
+func hashPassword(password string) []byte {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err == nil {
+		return []byte(hashedPassword)
+	}
+	return nil
+}
+
+// false is passwords don't match
+// true is passwords match
+func compareHashedPasswords(password string) bool {
+	hashedPassword := hashPassword(password)
+	if hashedPassword == nil {
+		return false
+	}
+	err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+//TODO: handle case where user already exists
+func registerUser(db *sql.DB, username string, password []byte) (sql.Result, error) {
+	res, err := db.Exec("INSERT INTO Users VALUES ($1, $2)", username, password)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }

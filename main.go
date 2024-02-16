@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+    // TODO: make this global so we don't need handler
     db := db.DbConnect()
 
     mux := http.NewServeMux()
