@@ -6,6 +6,8 @@ import (
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+        "errors"
+	"user/server/db"
 )
 
 var jwtSecret = []byte("my_secret_key")
@@ -21,7 +23,7 @@ type AuthResponse struct {
 	UserID  int    `json:"user_id.omitempty"`
 }
 
-func AuthHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -40,7 +42,7 @@ func AuthHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := authenticateUser(db, creds.Username, creds.Password)
+	userID, err := authenticateUser(creds.Username, creds.Password)
 	if err == nil {
 		response := AuthResponse{
 			Success: true,
@@ -57,11 +59,11 @@ func AuthHandler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func authenticateUser(db *sql.DB, username, password string) (int, error) {
+func authenticateUser(username, password string) (int, error) {
 	var userID int
 
 	hashedPassword := hashPassword(password)
-	err := db.QueryRow("SELECT id FROM Users WHERE username = $1 AND password_hash = $2", username, hashedPassword).Scan(&userID)
+	err := db.Db.QueryRow("SELECT id FROM Users WHERE username = $1 AND password_hash = $2", username, hashedPassword).Scan(&userID)
 	if err == sql.ErrNoRows {
 		return 0, err // User not found
 	} else if err != nil {
@@ -72,7 +74,7 @@ func authenticateUser(db *sql.DB, username, password string) (int, error) {
 	return userID, nil
 }
 
-func RegisterHanrler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var user Credentials
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
@@ -81,7 +83,7 @@ func RegisterHanrler(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 	hashedPassword := hashPassword(user.Password)
 	// Store user information in your database
-	_, err = registerUser(db, user.Username, hashedPassword)
+	_, err = registerUser(user.Username, hashedPassword)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -111,9 +113,18 @@ func compareHashedPasswords(password string) bool {
 	return true
 }
 
-//TODO: handle case where user already exists
-func registerUser(db *sql.DB, username string, password []byte) (sql.Result, error) {
-	res, err := db.Exec("INSERT INTO Users VALUES ($1, $2)", username, password)
+func registerUser(username string, password []byte) (sql.Result, error) {
+	// Check if the user already exists
+	var count int
+	err := db.Db.QueryRow("SELECT COUNT(*) FROM Users WHERE username = $1", username).Scan(&count)
+	if err != nil {
+		return nil, err
+	}
+	if count > 0 {
+		return nil, errors.New("user already exists")
+	}
+
+	res, err := db.Db.Exec("INSERT INTO Users VALUES ($1, $2)", username, password)
 	if err != nil {
 		return nil, err
 	}

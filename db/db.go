@@ -7,6 +7,8 @@ import (
 	"log"
 )
 
+var Db *sql.DB
+
 func DbConnect() *sql.DB {
 	const (
 		host     = "localhost"

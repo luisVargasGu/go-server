@@ -8,18 +8,15 @@ import (
 )
 
 func main() {
-    // TODO: make this global so we don't need handler
-    db := db.DbConnect()
+    db.Db = db.DbConnect()
 
     mux := http.NewServeMux()
 
     mux.HandleFunc("/image", handlers.ImageHandler)
-
-    authHandlerWrapper := func(w http.ResponseWriter, r *http.Request) {
-        handlers.AuthHandler(db, w, r)
-    }
     
-    mux.HandleFunc("/auth", authHandlerWrapper)
+    mux.HandleFunc("/auth", handlers.AuthHandler)
+
+    mux.HandleFunc("/register", handlers.RegisterHandler)
 
     handler := cors.Default().Handler(mux)
     http.ListenAndServe(":8080", handler)
