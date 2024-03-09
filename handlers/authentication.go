@@ -1,17 +1,16 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/dgrijalva/jwt-go"
+	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 	"user/server/db"
-
-	"github.com/dgrijalva/jwt-go"
-	_ "github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var jwtSecret = []byte("my_secret_key")
@@ -23,11 +22,22 @@ type Credentials struct {
 
 type AuthResponse struct {
 	Success bool   `json:"success"`
-	Message string `json:"message.omitempty"`
-	UserID  int64  `json:"user_id.omitempty"`
+	Message string `json:"message,omitempty"`
+	UserID  int64  `json:"user_id,omitempty"`
 }
 
 func AuthHandler(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if r.Method == http.MethodOptions {
+		// Handle preflight request
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "POST")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -36,35 +46,34 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	var creds Credentials
 	err := json.NewDecoder(r.Body).Decode(&creds)
 	if err != nil {
+		log.Println("Error decoding request body: ", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	credCheck := compareHashedPasswords(creds.Password)
-	if !credCheck {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	userID, err := authenticateUser(creds.Username, creds.Password)
 	if err != nil {
+		log.Println("Error authenticating user: ", err)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	token, err := generateJWTToken(strconv.Itoa(int(userID)))
 	if err != nil {
+		log.Println("Error generating JWT token: ", err)
 		http.Error(w, "Error generating JWT token", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "jwt_token",
-		Value:    token,
-		Expires:  time.Now().Add(24 * time.Hour), // Example: Set expiration time for 24 hours
-		HttpOnly: true,
-		Secure:   true, // Set true if your application is using HTTPS
-		SameSite: http.SameSiteStrictMode,
+		Name:    "jwt_token",
+		Value:   token,
+		Expires: time.Now().Add(24 * time.Hour), // Example: Set expiration time for 24 hours
 	})
 
 	response := AuthResponse{
@@ -80,21 +89,54 @@ func authenticateUser(username, password string) (int64, error) {
 	var userID int64
 
 	hashedPassword := hashPassword(password)
-	err := db.Db.QueryRow("SELECT user_id FROM Users WHERE username = $1 AND password_hash = $2", username, hashedPassword).Scan(&userID)
-	if err == sql.ErrNoRows {
+
+	rows, err := db.Db.Query("SELECT password, user_id FROM \"Users\" WHERE username = $1", username)
+	if err != nil {
+		log.Println("Error querying database: ", err)
 		return 0, err // User not found
-	} else if err != nil {
-		// database error
-		return 0, err
 	}
 
-	return userID, nil
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbPassword string
+		err = rows.Scan(&dbPassword, &userID)
+		if err != nil {
+			log.Println("Error scanning rows: ", err)
+			return 0, err
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+		if err == nil {
+			// Authentication successful, return the user ID
+			return userID, nil
+		}
+	}
+	log.Println("Invalid credentials")
+	return 0, errors.New("invalid credentials")
 }
 
-func RegisterHanrler(w http.ResponseWriter, r *http.Request) {
+func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if r.Method == http.MethodOptions {
+		// Handle preflight request
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "POST")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var user Credentials
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
+		log.Println("Error decoding request body: ", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -103,22 +145,27 @@ func RegisterHanrler(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := registerUser(user.Username, hashedPassword)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error registering user: ", err)
+		http.Error(w, "Failed to register user, please try again.", http.StatusInternalServerError)
+		return
 	}
 
 	token, err := generateJWTToken(strconv.Itoa(int(userID)))
 	if err != nil {
+		log.Println("Error generating JWT token: ", err)
 		http.Error(w, "Error generating JWT token", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "jwt_token",
-		Value:    token,
-		Expires:  time.Now().Add(24 * time.Hour),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Name:    "jwt_token",
+		Value:   token,
+		Expires: time.Now().Add(24 * time.Hour),
 	})
 
 	response := AuthResponse{
@@ -149,29 +196,17 @@ func generateJWTToken(username string) (string, error) {
 func hashPassword(password string) []byte {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err == nil {
-		return []byte(hashedPassword)
+		return hashedPassword
 	}
 	return nil
 }
 
-// false is passwords don't match
-// true is passwords match
-func compareHashedPasswords(password string) bool {
-	hashedPassword := hashPassword(password)
-	if hashedPassword == nil {
-		return false
-	}
-	err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
-	if err != nil {
-		return false
-	}
-	return true
-}
-
+// TODO: add same username support
 func registerUser(username string, password []byte) (int64, error) {
 	// Check if the user already exists
+
 	var count int
-	err := db.Db.QueryRow("SELECT COUNT(*) FROM Users WHERE username = $1", username).Scan(&count)
+	err := db.Db.QueryRow("SELECT COUNT(*) FROM \"Users\" WHERE username = $1", username).Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -180,7 +215,7 @@ func registerUser(username string, password []byte) (int64, error) {
 	}
 
 	var userID int64
-	err = db.Db.QueryRow("INSERT INTO Users(username, password) VALUES ($1, $2) RETURNING user_id", username, password).Scan(&userID)
+	err = db.Db.QueryRow("INSERT INTO \"Users\" (username, password) VALUES ($1, $2) RETURNING user_id", username, password).Scan(&userID)
 	if err != nil {
 		return 0, err
 	}
