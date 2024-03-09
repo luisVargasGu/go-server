@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"user/server/db"
 	"user/server/handlers"
-	"github.com/rs/cors"
 )
 
 func main() {
@@ -18,6 +17,5 @@ func main() {
 
     mux.HandleFunc("/register", handlers.RegisterHandler)
 
-    handler := cors.Default().Handler(mux)
-    http.ListenAndServe(":8080", handler)
+    http.ListenAndServe(":8080", mux)
 }
