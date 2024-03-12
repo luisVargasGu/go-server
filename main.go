@@ -13,9 +13,9 @@ func main() {
 
     mux.HandleFunc("/image", handlers.ImageHandler)
     
-    mux.HandleFunc("/auth", handlers.AuthHandler)
+    mux.HandleFunc("/auth", handlers.CorsHandler(handlers.AuthHandler))
 
-    mux.HandleFunc("/register", handlers.RegisterHandler)
+    mux.HandleFunc("/register", handlers.CorsHandler(handlers.RegisterHandler))
 
     http.ListenAndServe(":8080", mux)
 }

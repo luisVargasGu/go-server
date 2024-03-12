@@ -27,17 +27,7 @@ type AuthResponse struct {
 }
 
 func AuthHandler(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if r.Method == http.MethodOptions {
-		// Handle preflight request
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Methods", "POST")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
+    	origin := r.Header.Get("Origin")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -117,17 +107,7 @@ func authenticateUser(username, password string) (int64, error) {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if r.Method == http.MethodOptions {
-		// Handle preflight request
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Methods", "POST")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
+    	origin := r.Header.Get("Origin")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
