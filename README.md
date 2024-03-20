@@ -26,9 +26,9 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
     ```dotenv
     DB_HOST=localhost
     DB_PORT=5432
-    DB_USER=your_username
-    DB_PASSWORD=your_password
-    DB_NAME=your_database_name
+    DB_USER=admin
+    DB_PASSWORD=password
+    DB_NAME=chat_app
     ```
 5. **Build and Run:** Navigate to the project directory and run the following commands:
     ```bash
