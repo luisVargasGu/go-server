@@ -45,3 +45,8 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
 3. **Install Dependencies:** Navigate to the project directory and run `npm i`.
 4. **Start the development server:** `npm run dev`
 5. **Access the App:** Once the server is running, access the application in your web browser at `http://localhost:3000`.
+
+
+## User Flow
+
+![User chat flow](https://github.com/[luisVargasGu]/[go-server]/blob/[main]/images/Chat.png?raw=true)
