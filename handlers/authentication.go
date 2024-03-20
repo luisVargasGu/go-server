@@ -15,6 +15,11 @@ import (
 
 var jwtSecret = []byte("my_secret_key")
 
+type User struct {
+	ID  string
+	exp float64
+}
+
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -27,7 +32,7 @@ type AuthResponse struct {
 }
 
 func AuthHandler(w http.ResponseWriter, r *http.Request) {
-    	origin := r.Header.Get("Origin")
+	origin := r.Header.Get("Origin")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -75,39 +80,8 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	sendJSONResponse(w, http.StatusOK, response)
 }
 
-func authenticateUser(username, password string) (int64, error) {
-	var userID int64
-
-	hashedPassword := hashPassword(password)
-
-	rows, err := db.Db.Query("SELECT password, user_id FROM \"Users\" WHERE username = $1", username)
-	if err != nil {
-		log.Println("Error querying database: ", err)
-		return 0, err // User not found
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbPassword string
-		err = rows.Scan(&dbPassword, &userID)
-		if err != nil {
-			log.Println("Error scanning rows: ", err)
-			return 0, err
-		}
-
-		err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-		if err == nil {
-			// Authentication successful, return the user ID
-			return userID, nil
-		}
-	}
-	log.Println("Invalid credentials")
-	return 0, errors.New("invalid credentials")
-}
-
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-    	origin := r.Header.Get("Origin")
+	origin := r.Header.Get("Origin")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -155,6 +129,65 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSONResponse(w, http.StatusCreated, response)
+}
+
+func AuthenticateRequest(r *http.Request) (*User, error) {
+	cookie, err := r.Cookie("jwt_token")
+	if err != nil {
+		log.Println("Error getting JWT token from cookie: ", err)
+		return nil, err // No JWT token found in the cookie
+	}
+
+	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
+		return jwtSecret, nil
+	})
+	if err != nil {
+		log.Println("Error parsing JWT token: ", err)
+		return nil, err // Failed to parse JWT token
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userID := claims["username"].(string)
+		expirationTime := claims["exp"].(float64)
+
+		return &User{ID: userID, exp: expirationTime}, nil
+	}
+
+	return nil, jwt.ValidationError{Inner: errors.New("invalid token"), Errors: jwt.ValidationErrorClaimsInvalid}
+}
+
+func authenticateUser(username, password string) (int64, error) {
+	var userID int64
+
+	hashedPassword := hashPassword(password)
+
+	rows, err := db.Db.Query("SELECT password, user_id FROM \"Users\" WHERE username = $1", username)
+	if err != nil {
+		log.Println("Error querying database: ", err)
+		return 0, err // User not found
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbPassword string
+		err = rows.Scan(&dbPassword, &userID)
+		if err != nil {
+			log.Println("Error scanning rows: ", err)
+			return 0, err
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+		if err == nil {
+			// Authentication successful, return the user ID
+			return userID, nil
+		}
+	}
+	log.Println("Invalid credentials")
+	return 0, errors.New("invalid credentials")
 }
 
 func generateJWTToken(username string) (string, error) {
