@@ -8,6 +8,8 @@ import (
 
 func main() {
     db.Db = db.DbConnect()
+    hub := handlers.HubInitialize()
+    go hub.Run()
 
     mux := http.NewServeMux()
 
@@ -16,6 +18,8 @@ func main() {
     mux.HandleFunc("/auth", handlers.CorsHandler(handlers.AuthHandler))
 
     mux.HandleFunc("/register", handlers.CorsHandler(handlers.RegisterHandler))
+
+    mux.HandleFunc("/chat", handlers.ChattingHandler)
 
     http.ListenAndServe(":8080", mux)
 }
