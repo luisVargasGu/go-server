@@ -1,25 +1,19 @@
 package main
 
 import (
-	"net/http"
+	"log"
+	"user/server/cmd/api"
 	"user/server/db"
-	"user/server/handlers"
+	"user/server/services/hub"
 )
 
 func main() {
-    db.Db = db.DbConnect()
-    hub := handlers.HubInitialize()
-    go hub.Run()
+	db.Db = db.DbConnect()
+	hub := hub.HubInitialize()
+	go hub.Run()
 
-    mux := http.NewServeMux()
-
-    mux.HandleFunc("/image", handlers.ImageHandler)
-    
-    mux.HandleFunc("/auth", handlers.CorsHandler(handlers.AuthHandler))
-
-    mux.HandleFunc("/register", handlers.CorsHandler(handlers.RegisterHandler))
-
-    mux.HandleFunc("/chat", handlers.ChattingHandler)
-
-    http.ListenAndServe(":8080", mux)
+	server := api.NewAPIServer(":8080", db.Db)
+	if err := server.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
