@@ -26,9 +26,9 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
     ```dotenv
     DB_HOST=localhost
     DB_PORT=5432
-    DB_USER=your_username
-    DB_PASSWORD=your_password
-    DB_NAME=your_database_name
+    DB_USER=admin
+    DB_PASSWORD=password
+    DB_NAME=chat_app
     ```
 5. **Build and Run:** Navigate to the project directory and run the following commands:
     ```bash
@@ -40,7 +40,7 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
 ## Setup front-end
 
 1. **Install Node:** Make sure you have Node installed on your system. You can download it from the [official Node website](https://nodejs.org/).
-2. **Clone the Repository:** Clone this repository to your local machine.
+2. **Clone the Repository:** Clone [this](https://github.com/luisVargasGu/react-portfolio) repository to your local machine.
 3. **Install Dependencies:** Navigate to the project directory and run `npm i`.
 4. **Start the development server:** `npm run dev`
 5. **Access the App:** Once the server is running, access the application in your web browser at `http://localhost:3000`.
