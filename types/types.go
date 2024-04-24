@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/gorilla/websocket"
 	"time"
 )
 
@@ -25,13 +24,6 @@ type Message struct {
 	Content   string
 	Timestamp time.Time
 	IsRead    bool
-}
-
-type Client struct {
-	Conn     *websocket.Conn
-	Send     chan []byte
-	Username string
-	ID       string
 }
 
 type MessageStore interface {
