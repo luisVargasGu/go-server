@@ -47,7 +47,7 @@ func (s *APIServer) Run() error {
 	messageHandler.RegisterRoutes(subrouter)
 
 	hubStore := hub.NewStore(s.db)
-	hubHandler := hub.NewHandler(channelStore, userStore)
+	hubHandler := hub.NewHandler(hubStore, channelStore, roomStore, userStore)
 	hubHandler.HubInitialize()
 
 	subrouter.HandleFunc("/image", image.ImageHandler)
