@@ -9,7 +9,9 @@ import (
 	"user/server/services/hub"
 	"user/server/services/utils"
 	"user/server/types"
+
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
 type Handler struct {
@@ -22,12 +24,20 @@ func NewHandler(store types.MessageStore, userStore types.UserStore) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", auth.WithJWTAuth(h.ChattingHandler, h.userStore))
-	// r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", h.CreateMessage).Methods("POST")
+	r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", auth.WithJWTAuth(h.ChatAndCreateMessageHandler, h.userStore))
+}
+
+func (h *Handler) ChatAndCreateMessageHandler(w http.ResponseWriter, r *http.Request) {
+	if websocket.IsWebSocketUpgrade(r) {
+		h.ChattingHandler(w, r)
+		return
+	}
+
+	h.CreateMessage(w, r)
 }
 
 func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
-        log.Println("ChattingHandler")
+	log.Println("ChattingHandler")
 	vars := mux.Vars(r)
 	channelID, err := strconv.Atoi(vars["channelID"])
 	roomID, err := strconv.Atoi(vars["roomID"])
@@ -40,8 +50,8 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	channel := hub.HubInstance.Channels[channelID]
 	room := channel.Rooms[roomID]
 
-        log.Println("room: ", room)
-        log.Println("channel: ", channel)
+	log.Println("room: ", room)
+	log.Println("channel: ", channel)
 	// Upgrade this connection to a WebSocket
 	ws, err := utils.UpgradeToWebSocket(w, r)
 	if err != nil {
@@ -52,7 +62,7 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(auth.UserKey).(*types.User)
 
 	// Create a new client
-	client := hub.NewClient(ws, fmt.Sprint(user.ID))
+	client := hub.NewClient(ws, fmt.Sprint(user.ID), fmt.Sprint(user.Username))
 	room.Register <- client
 
 	go client.ReadMessages(room)
