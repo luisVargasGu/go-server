@@ -22,11 +22,12 @@ func NewHandler(store types.MessageStore, userStore types.UserStore) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", auth.WithJWTAuth(h.ChattingHandler, h.userStore)).Methods("GET")
-	r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", h.CreateMessage).Methods("POST")
+	r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", auth.WithJWTAuth(h.ChattingHandler, h.userStore))
+	// r.HandleFunc("/channels/{channelID}/room/{roomID}/messages", h.CreateMessage).Methods("POST")
 }
 
 func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
+        log.Println("ChattingHandler")
 	vars := mux.Vars(r)
 	channelID, err := strconv.Atoi(vars["channelID"])
 	roomID, err := strconv.Atoi(vars["roomID"])
@@ -39,6 +40,8 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	channel := hub.HubInstance.Channels[channelID]
 	room := channel.Rooms[roomID]
 
+        log.Println("room: ", room)
+        log.Println("channel: ", channel)
 	// Upgrade this connection to a WebSocket
 	ws, err := utils.UpgradeToWebSocket(w, r)
 	if err != nil {
