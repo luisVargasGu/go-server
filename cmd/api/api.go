@@ -2,14 +2,16 @@ package api
 
 import (
 	"database/sql"
-	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"user/server/services/channel"
+	"user/server/services/hub"
 	"user/server/services/image"
 	"user/server/services/message"
 	"user/server/services/room"
 	"user/server/services/user"
+
+	"github.com/gorilla/mux"
 )
 
 type APIServer struct {
@@ -43,6 +45,10 @@ func (s *APIServer) Run() error {
 	messageStore := message.NewStore(s.db)
 	messageHandler := message.NewHandler(messageStore, userStore)
 	messageHandler.RegisterRoutes(subrouter)
+
+	hubStore := hub.NewStore(s.db)
+	hubHandler := hub.NewHandler(channelStore, userStore)
+	hubHandler.HubInitialize()
 
 	subrouter.HandleFunc("/image", image.ImageHandler)
 
