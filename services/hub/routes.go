@@ -4,41 +4,11 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"sync"
-	"time"
+	"user/server/types"
 )
 
-type Channel struct {
-	ID    int
-	Name  string
-	Rooms []*Room
-}
-
-type Room struct {
-	ID         int
-	Name       string
-	Clients    map[*Client]bool
-	Messages   []*Message
-	Register   chan *Client
-	Unregister chan *Client
-	Broadcast  chan []byte
-}
-
-type Message struct {
-	ID      int
-	RoomID  int
-	Sender  string
-	Content string
-	Time    time.Time
-}
-
 type Hub struct {
-	Channels map[int]*Channel
-}
-
-type Client struct {
-	Conn *websocket.Conn
-	Send chan []byte
-	ID   string
+	Channels map[int]*types.Channel
 }
 
 var (
@@ -46,15 +16,48 @@ var (
 	once        sync.Once
 )
 
-// Create a new WebSocket client
-func NewClient(conn *websocket.Conn, id string) *Client {
-	return &Client{conn, make(chan []byte), id}
+// TODO: move to a client type definition file
+func NewClient(conn *websocket.Conn, id string, username string) *types.Client {
+	return &types.Client{Conn: conn, Send: make(chan []byte), ID: id, Username: username}
 }
 
-func HubInitialize() *Hub {
+type Handler struct {
+	store        types.HubStore
+	channelStore types.ChannelStore
+	roomStore    types.RoomStore
+	userStore    types.UserStore
+}
+
+func NewHandler(store types.HubStore, channelStore types.ChannelStore, roomStore types.RoomStore, userStore types.UserStore) *Handler {
+	return &Handler{store: store, channelStore: channelStore, roomStore: roomStore, userStore: userStore}
+}
+
+func (h *Handler) HubInitialize() *Hub {
 	once.Do(func() {
+		channels, err := h.channelStore.GetAllChannels()
+		if err != nil {
+			log.Println("Error getting all channels during Hub initialize")
+			return
+		}
 		HubInstance = &Hub{
-			Channels: make(map[int]*Channel),
+			Channels: make(map[int]*types.Channel),
+		}
+
+		for _, channel := range channels {
+			rooms, err := h.roomStore.GetRoomsInChannel(channel.ID)
+			if err != nil {
+				log.Println("Error getting all channels during Hub initialize")
+				return
+			}
+			channel.Rooms = make(map[int]*types.Room)
+			for _, room := range rooms {
+				room.Clients = make(map[*types.Client]bool)
+				room.Register = make(chan *types.Client)
+				room.Unregister = make(chan *types.Client)
+				room.Broadcast = make(chan []byte)
+				channel.Rooms[room.ID] = room
+				go room.Run()
+			}
 		}
 		go HubInstance.Run()
 	})
@@ -84,41 +87,6 @@ func (h *Hub) Run() {
 						}
 					}
 				}
-			}
-		}
-	}
-}
-
-func (c *Client) ReadMessages(room *Room) {
-	defer func() {
-		c.Conn.Close()
-	}()
-	for {
-		_, message, err := c.Conn.ReadMessage()
-		if err != nil {
-			log.Println("Error reading from WebSocket:", err)
-			break
-		}
-		// Process the received message (e.g., save to database)
-		room.Broadcast <- message
-	}
-}
-
-// WriteMessages writes messages from the send channel to the client connection
-func (c *Client) WriteMessages() {
-	defer func() {
-		c.Conn.Close()
-	}()
-	for {
-		select {
-		case message, ok := <-c.Send:
-			if !ok {
-				return
-			}
-			err := c.Conn.WriteMessage(websocket.TextMessage, message)
-			if err != nil {
-				log.Println("Error writing to WebSocket:", err)
-				return
 			}
 		}
 	}
