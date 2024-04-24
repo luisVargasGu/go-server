@@ -14,6 +14,29 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
+func (s *Store) GetAllChannels() ([]*types.Channel, error) {
+	rows, err := s.db.Query(`SELECT * FROM Channels`)
+
+	if err != nil {
+		log.Println("Error getting all channels")
+		return nil, err
+	}
+	defer rows.Close()
+
+	channels := make([]*types.Channel, 10)
+	for rows.Next() {
+		channel := &types.Channel{}
+		err := rows.Scan(&channel.ID, &channel.Name)
+		if err != nil {
+			log.Println("Error scanning channel")
+			return nil, err
+		}
+		channels = append(channels, channel)
+	}
+
+	return channels, nil
+}
+
 func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 	rows, err := s.db.Query(`SELECT Channels.* 
                             FROM Channels
