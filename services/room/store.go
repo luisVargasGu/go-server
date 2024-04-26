@@ -26,7 +26,7 @@ func (s *Store) GetRoomsInChannel(channelID int) ([]*types.Room, error) {
 	}
 	defer rows.Close()
 
-	rooms := make([]*types.Room, 10)
+	rooms := make([]*types.Room, 0)
 	for rows.Next() {
 		room := &types.Room{}
 		err := rows.Scan(&room.ID, &room.Name, &room.ChannelID)
