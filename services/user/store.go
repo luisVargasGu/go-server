@@ -19,7 +19,7 @@ func (s *Store) CreateUser(user types.User) (int, error) {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM Users WHERE username = $1", user.Username).Scan(&count)
 	if err != nil {
-                log.Println("Error querying database: ", err)
+		log.Println("Error querying database: ", err)
 		return -1, err
 	}
 
@@ -46,7 +46,6 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 	user := new(types.User)
 	for rows.Next() {
 		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)
-                log.Println("Curr user: ", user)
 		if err != nil {
 			log.Println("Error scanning rows: ", err)
 			return nil, err
@@ -62,25 +61,25 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 }
 
 func (s *Store) GetUserByID(userID int) (*types.User, error) {
-    rows, err := s.db.Query("SELECT * FROM Users WHERE ID = $1", userID)
-    if err != nil {
-        log.Println("Error querying database: ", err)
-        return nil, err // User not found
-    }
+	rows, err := s.db.Query("SELECT * FROM Users WHERE ID = $1", userID)
+	if err != nil {
+		log.Println("Error querying database: ", err)
+		return nil, err // User not found
+	}
 
-    user := new(types.User)
-    for rows.Next() {
-        err = rows.Scan(user.ID, user.Username, user.Password)
-        if err != nil {
-            log.Println("Error scanning rows: ", err)
-            return nil, err
-        }
+	user := new(types.User)
+	for rows.Next() {
+		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)
+		if err != nil {
+			log.Println("Error scanning rows: ", err)
+			return nil, err
+		}
 
-        if err == nil {
-            // Authentication successful, return the user ID
-            return user, nil
-        }
-    }
-    log.Println("Invalid credentials")
-    return nil, errors.New("invalid credentials")
+		if err == nil {
+			// Authentication successful, return the user ID
+			return user, nil
+		}
+	}
+	log.Println("Invalid credentials")
+	return nil, errors.New("invalid credentials")
 }
