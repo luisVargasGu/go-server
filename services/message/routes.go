@@ -50,8 +50,6 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	channel := hub.HubInstance.Channels[channelID]
 	room := channel.Rooms[roomID]
 
-	log.Println("room: ", room)
-	log.Println("channel: ", channel)
 	// Upgrade this connection to a WebSocket
 	ws, err := utils.UpgradeToWebSocket(w, r)
 	if err != nil {
@@ -59,7 +57,7 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("Could not open WebSocket connection: ", err)
 	}
 
-	user := r.Context().Value(auth.UserKey).(*types.User)
+	user := auth.GetUserFromContext(r.Context())
 
 	// Create a new client
 	client := hub.NewClient(ws, fmt.Sprint(user.ID), fmt.Sprint(user.Username))

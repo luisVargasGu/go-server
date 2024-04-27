@@ -50,7 +50,6 @@ func (h *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("User:", user)
 	token, err := auth.GenerateJWTToken(strconv.Itoa(int(user.ID)))
 	if err != nil {
 		log.Println("Error generating JWT token: ", err)
