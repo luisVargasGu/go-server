@@ -27,13 +27,11 @@ func GenerateJWTToken(username string) (string, error) {
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 	})
 
-        log.Println("Token:", token)
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		return "", err
 	}
 
-        log.Println("TokenString:", tokenString)
 	return tokenString, nil
 }
 
@@ -49,7 +47,6 @@ func WithJWTAuth(handlerFunc http.HandlerFunc, store types.UserStore) http.Handl
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
 		handlerFunc(w, r)
 	}
 }
@@ -74,7 +71,7 @@ func AuthenticateRequest(r *http.Request, s types.UserStore) (*types.User, error
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		username := claims["username"].(string)
-		expirationTime := claims["exp"].(int64)
+		expirationTime := int64(claims["exp"].(float64))
 
 		userID, err := strconv.Atoi(username)
 		if err != nil {
@@ -91,10 +88,18 @@ func AuthenticateRequest(r *http.Request, s types.UserStore) (*types.User, error
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, UserKey, user)
 		ctx = context.WithValue(ctx, UserExpirationKey, time.Unix(expirationTime, 0))
-		r = r.WithContext(ctx)
+		*r = *r.WithContext(ctx)
 
 		return user, nil
 	}
 
 	return nil, jwt.ValidationError{Inner: errors.New("invalid token"), Errors: jwt.ValidationErrorClaimsInvalid}
+}
+
+func GetUserFromContext(ctx context.Context) *types.User {
+	user, ok := ctx.Value(UserKey).(*types.User)
+	if !ok {
+		return nil
+	}
+	return user
 }
