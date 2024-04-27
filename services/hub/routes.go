@@ -44,6 +44,7 @@ func (h *Handler) HubInitialize() *Hub {
 		}
 
 		for _, channel := range channels {
+			HubInstance.Channels[channel.ID] = channel
 			rooms, err := h.roomStore.GetRoomsInChannel(channel.ID)
 			if err != nil {
 				log.Println("Error getting all channels during Hub initialize")
