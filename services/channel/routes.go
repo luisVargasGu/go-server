@@ -1,12 +1,14 @@
 package channel
 
 import (
-	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strconv"
+	"user/server/services/auth"
 	"user/server/services/utils"
 	"user/server/types"
+
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -19,28 +21,25 @@ func NewHandler(store types.ChannelStore, userStore types.UserStore) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/channels", h.GetChannelsForUser).Methods("GET")
-	r.HandleFunc("/channels", h.CreateChannel).Methods("POST")
-	r.HandleFunc("/channels/{channelID}", h.DeleteChannel).Methods("DELETE")
+	r.HandleFunc("/channels", auth.WithJWTAuth(
+		utils.CorsHandler(h.GetChannelsForUser),
+		h.userStore),
+	).Methods("GET")
+	r.HandleFunc("/channels", auth.WithJWTAuth(h.CreateChannel, h.userStore)).Methods("POST")
+	r.HandleFunc("/channels/{channelID}", auth.WithJWTAuth(h.DeleteChannel, h.userStore)).Methods("DELETE")
 }
 
 func (h *Handler) GetChannelsForUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	channelID, err := strconv.Atoi(vars["channelID"])
-	if err != nil {
-		log.Println("Invalid channel ID")
-		http.Error(w, "Invalid channel ID", http.StatusBadRequest)
-		return
-	}
-
-	channels, err := h.store.GetChannelsForUser(channelID)
+	user := auth.GetUserFromContext(r.Context())
+	channels, err := h.store.GetChannelsForUser(user.ID)
 	if err != nil {
 		log.Println("Error getting channels")
 		http.Error(w, "Error getting channels", http.StatusInternalServerError)
 		return
 	}
 
-	utils.SendJSONResponse(w, http.StatusOK, channels)
+	response := types.ChannelResponse{Channels: channels}
+	utils.SendJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
@@ -80,4 +79,3 @@ func (h *Handler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
-

@@ -49,7 +49,7 @@ func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 	}
 	defer rows.Close()
 
-	channels := make([]*types.Channel, 10)
+	channels := make([]*types.Channel, 0)
 	for rows.Next() {
 		channel := &types.Channel{}
 		err := rows.Scan(&channel.ID, &channel.Name)
