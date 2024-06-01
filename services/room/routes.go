@@ -1,12 +1,14 @@
 package room
 
 import (
-	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strconv"
+	"user/server/services/auth"
 	"user/server/services/utils"
 	"user/server/types"
+
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -19,7 +21,10 @@ func NewHandler(store types.RoomStore, userStore types.UserStore) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/channels/{channelID}/rooms", h.GetRoomsInChannel).Methods("GET")
+	r.HandleFunc("/channels/{channelID}/rooms", auth.WithJWTAuth(
+		utils.CorsHandler(h.GetRoomsInChannel),
+		h.userStore),
+	).Methods("GET")
 	r.HandleFunc("/rooms", h.CreateRoom).Methods("POST")
 	r.HandleFunc("/rooms/{roomID}", h.DeleteRoom).Methods("DELETE")
 }
@@ -28,8 +33,8 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	channelID, err := strconv.Atoi(vars["channelID"])
 	if err != nil {
-		log.Println("Invalid channel ID")
-		http.Error(w, "Invalid channel ID", http.StatusBadRequest)
+		log.Println("Invalid room ID")
+		http.Error(w, "Invalid room ID", http.StatusBadRequest)
 		return
 	}
 
@@ -40,7 +45,8 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SendJSONResponse(w, http.StatusOK, rooms)
+	response := types.RoomResponse{Rooms: rooms}
+	utils.SendJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
