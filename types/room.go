@@ -1,14 +1,18 @@
 package types
 
 type Room struct {
-	ID         int
-	Name       string
-	ChannelID  int
-	Clients    map[*Client]bool
-	Messages   []*Message
-	Register   chan *Client
-	Unregister chan *Client
-	Broadcast  chan []byte
+    ID         int            `json:"id"`
+    Name       string         `json:"name"`
+    ChannelID  int            `json:"channel_id"`
+    Clients    map[*Client]bool `json:"-"`
+    Messages   []*Message     `json:"-"`
+    Register   chan *Client   `json:"-"`
+    Unregister chan *Client   `json:"-"`
+    Broadcast  chan []byte    `json:"-"`
+}
+
+type RoomResponse struct {
+	Rooms []*Room `json:"rooms"`
 }
 
 type CreateRoomPayload struct {

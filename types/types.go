@@ -37,8 +37,9 @@ type UserStore interface {
 	CreateUser(User) (int, error)
 }
 
+// TODO: move to hub type definition file
+// Do we need this? It's empty
 type HubStore interface {
-
 }
 
 type ChannelStore interface {
@@ -46,7 +47,6 @@ type ChannelStore interface {
 	GetChannelsForUser(userID int) ([]*Channel, error)
 	CreateChannel(channel CreateChannelPayload) error
 	DeleteChannel(channelID int) error
-
 }
 
 type LoginUserPayload struct {
@@ -63,6 +63,10 @@ type CreateMessagePayload struct {
 	Content  string `json:"content" validate:"required"`
 	RoomID   int    `json:"roomID" validate:"required"`
 	SenderID string `json:"senderID" validate:"required"`
+}
+
+type ChannelResponse struct {
+	Channels []*Channel `json:"channels"`
 }
 
 type CreateChannelPayload struct {
