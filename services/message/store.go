@@ -14,7 +14,7 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) GetMessagesInRoom(roomID int) ([]types.Message, error) {
+func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	rows, err := s.db.Query("SELECT * FROM Messages WHERE RoomID = $1", roomID)
 	if err != nil {
 		log.Println("Error getting messages in room: ", err)
@@ -22,9 +22,9 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]types.Message, error) {
 	}
 	defer rows.Close()
 
-	var messages []types.Message
+	messages := make([]*types.Message, 0)
 	for rows.Next() {
-		var m types.Message
+		m := &types.Message{}
 		err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Timestamp)
 		if err != nil {
 			log.Println("Error scanning message row: ", err)

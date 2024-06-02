@@ -18,16 +18,16 @@ type Channel struct {
 }
 
 type Message struct {
-	ID        int
-	RoomID    int
-	SenderID  string
-	Content   string
-	Timestamp time.Time
-	IsRead    bool
+	ID        int       `json:"id"`
+	RoomID    int       `json:"room_id"`
+	SenderID  string    `json:"sender_id"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+	IsRead    bool      `json:"is_read"`
 }
 
 type MessageStore interface {
-	GetMessagesInRoom(roomID int) ([]Message, error)
+	GetMessagesInRoom(roomID int) ([]*Message, error)
 	CreateMessage(message CreateMessagePayload) error
 }
 
@@ -57,6 +57,10 @@ type LoginUserPayload struct {
 type RegisterUserPayload struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+}
+
+type MessagesResponse struct {
+	Messages []*Message `json:"messages"`
 }
 
 type CreateMessagePayload struct {
