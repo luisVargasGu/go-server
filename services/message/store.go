@@ -25,7 +25,7 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	messages := make([]*types.Message, 0)
 	for rows.Next() {
 		m := &types.Message{}
-		err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Timestamp)
+		err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Timestamp, &m.IsRead)
 		if err != nil {
 			log.Println("Error scanning message row: ", err)
 			return nil, err
