@@ -28,7 +28,7 @@ type Message struct {
 
 type MessageStore interface {
 	GetMessagesInRoom(roomID int) ([]*Message, error)
-	CreateMessage(message CreateMessagePayload) error
+	CreateMessage(message Message) error
 }
 
 type UserStore interface {
@@ -61,12 +61,6 @@ type RegisterUserPayload struct {
 
 type MessagesResponse struct {
 	Messages []*Message `json:"messages"`
-}
-
-type CreateMessagePayload struct {
-	Content  string `json:"content" validate:"required"`
-	RoomID   int    `json:"roomID" validate:"required"`
-	SenderID string `json:"senderID" validate:"required"`
 }
 
 type ChannelResponse struct {
