@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"log"
 	"github.com/gorilla/websocket"
 )
@@ -12,7 +13,7 @@ type Client struct {
 	ID       string
 }
 
-func (c *Client) ReadMessages(room *Room) {
+func (c *Client) ReadMessages(room *Room, store MessageStore) {
 	defer func() {
 		c.Conn.Close()
 	}()
@@ -22,7 +23,15 @@ func (c *Client) ReadMessages(room *Room) {
 			log.Println("Error reading from WebSocket:", err)
 			break
 		}
-		// Process the received message (e.g., save to database)
+
+		var msg Message
+		err = json.Unmarshal(message, &msg)
+		if err != nil {
+			log.Println("Error unmarshalling JSON message", err)
+			return
+		}
+
+		store.CreateMessage(msg)
 		room.Broadcast <- message
 	}
 }
