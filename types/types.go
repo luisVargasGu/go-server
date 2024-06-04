@@ -20,7 +20,7 @@ type Channel struct {
 type Message struct {
 	ID        int       `json:"id"`
 	RoomID    int       `json:"room_id"`
-	SenderID  string    `json:"sender_id"`
+	SenderID  int       `json:"sender_id"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 	IsRead    bool      `json:"is_read"`
@@ -74,5 +74,5 @@ type CreateChannelPayload struct {
 type LoginResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
-	UserID  int    `json:"userID"`
+	UserID  int    `json:"user_id"`
 }

@@ -37,7 +37,8 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 }
 
 func (s *Store) CreateMessage(m types.Message) error {
-	_, err := s.db.Exec("INSERT INTO Messages (RoomID, SenderID, Content) VALUES ($1, $2, $3)", m.RoomID, m.SenderID, m.Content)
+	_, err := s.db.Exec("INSERT INTO Messages (RoomID, SenderID, Content, IsRead) VALUES ($1, $2, $3, $4)",
+		m.RoomID, m.SenderID, m.Content, false)
 	if err != nil {
 		log.Println("Error creating message: ", err)
 		return err
