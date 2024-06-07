@@ -22,7 +22,7 @@ CREATE TABLE Rooms (
     ID SERIAL PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
     ChannelID INT NOT NULL,
-    FOREIGN KEY (ChannelID) REFERENCES Channels(ID)
+    FOREIGN KEY (ChannelID) REFERENCES Channels(ID) ON DELETE CASCADE
 );
 
 CREATE TABLE Messages (
@@ -32,7 +32,7 @@ CREATE TABLE Messages (
     Content TEXT,
     Timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     IsRead BOOLEAN,
-    FOREIGN KEY (RoomID) REFERENCES Rooms(ID),
+    FOREIGN KEY (RoomID) REFERENCES Rooms(ID) ON DELETE CASCADE,
     FOREIGN KEY (SenderID) REFERENCES Users(ID)
 );
 
@@ -40,16 +40,16 @@ CREATE TABLE ChannelsToUsers (
     user_id INT,
     channel_id INT,
     PRIMARY KEY (user_id, channel_id),
-    FOREIGN KEY (user_id) REFERENCES Users(ID),
-    FOREIGN KEY (channel_id) REFERENCES Channels(ID)
+    FOREIGN KEY (user_id) REFERENCES Users(ID) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id) REFERENCES Channels(ID) ON DELETE CASCADE
 );
 
 CREATE TABLE RoomsToChannels (
     room_id INT,
     channel_id INT,
     PRIMARY KEY (room_id, channel_id),
-    FOREIGN KEY (room_id) REFERENCES Rooms(ID),
-    FOREIGN KEY (channel_id) REFERENCES Channels(ID)
+    FOREIGN KEY (room_id) REFERENCES Rooms(ID) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id) REFERENCES Channels(ID) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_username_users ON Users (Username);
