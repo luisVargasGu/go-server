@@ -25,7 +25,10 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 		utils.CorsHandler(h.GetChannelsForUser),
 		h.userStore),
 	).Methods("GET")
-	r.HandleFunc("/channels", auth.WithJWTAuth(h.CreateChannel, h.userStore)).Methods("POST")
+	r.HandleFunc("/channels", utils.CorsHandler(
+		auth.WithJWTAuth(h.CreateChannel,
+		h.userStore),
+	)).Methods("POST", "OPTIONS")
 	r.HandleFunc("/channels/{channelID}", auth.WithJWTAuth(h.DeleteChannel, h.userStore)).Methods("DELETE")
 }
 
@@ -43,7 +46,9 @@ func (h *Handler) GetChannelsForUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
-	channel := types.CreateChannelPayload{}
+	user := auth.GetUserFromContext(r.Context())
+
+	channel := &types.Channel{}
 	err := utils.ParseJSON(r, channel)
 	if err != nil {
 		log.Println("Invalid JSON")
@@ -51,9 +56,9 @@ func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.store.CreateChannel(channel)
+	err = h.store.CreateChannel(channel, user)
 	if err != nil {
-		log.Println("Error creating channel")
+		log.Println("Error: ", err)
 		http.Error(w, "Error creating channel", http.StatusInternalServerError)
 		return
 	}
@@ -72,7 +77,7 @@ func (h *Handler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
 
 	err = h.store.DeleteChannel(channelID)
 	if err != nil {
-		log.Println("Error deleting channel")
+		log.Println("Error: ", err)
 		http.Error(w, "Error deleting channel", http.StatusInternalServerError)
 		return
 	}

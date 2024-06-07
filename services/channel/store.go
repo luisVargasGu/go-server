@@ -63,10 +63,20 @@ func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 	return channels, nil
 }
 
-func (s *Store) CreateChannel(channel types.CreateChannelPayload) error {
-	_, err := s.db.Exec(`INSERT INTO Channels (Name) VALUES ($1)`, channel.Name)
+func (s *Store) CreateChannel(channel *types.Channel, user *types.User) error {
+	err := s.db.QueryRow(`INSERT INTO Channels (Name) VALUES ($1)
+			      RETURNING ID, Name`,
+		channel.Name).Scan(&channel.ID,
+		&channel.Name)
 	if err != nil {
 		log.Println("Error creating channel")
+		return err
+	}
+
+	_, err = s.db.Exec(`INSERT INTO ChannelsToUsers (channel_id, user_id) VALUES ($1, $2)`,
+		channel.ID, user.ID)
+	if err != nil {
+		log.Println("Error linking channel to user")
 		return err
 	}
 
