@@ -30,7 +30,6 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 }
 
 func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("ChattingHandler")
 	vars := mux.Vars(r)
 	channelID, err := strconv.Atoi(vars["channelID"])
 	roomID, err := strconv.Atoi(vars["roomID"])
