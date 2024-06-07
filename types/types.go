@@ -12,9 +12,9 @@ type User struct {
 }
 
 type Channel struct {
-	ID    int
-	Name  string
-	Rooms map[int]*Room
+	ID    int           `json:"id"`
+	Name  string        `json:"name"`
+	Rooms map[int]*Room `json:"-"`
 }
 
 type Message struct {
@@ -45,7 +45,7 @@ type HubStore interface {
 type ChannelStore interface {
 	GetAllChannels() ([]*Channel, error)
 	GetChannelsForUser(userID int) ([]*Channel, error)
-	CreateChannel(channel CreateChannelPayload) error
+	CreateChannel(channel *Channel, user *User) error
 	DeleteChannel(channelID int) error
 }
 
@@ -65,10 +65,6 @@ type MessagesResponse struct {
 
 type ChannelResponse struct {
 	Channels []*Channel `json:"channels"`
-}
-
-type CreateChannelPayload struct {
-	Name string `json:"name" validate:"required"`
 }
 
 type LoginResponse struct {
