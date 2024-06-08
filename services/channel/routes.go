@@ -54,7 +54,7 @@ func (h *Handler) GetChannelsForUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	channel := &types.Channel{}
+	channel := &types.Channel{ Rooms: make(map[int]*types.Room, 0) }
 	err := utils.ParseJSON(r, channel)
 	if err != nil {
 		log.Println("Invalid JSON")
