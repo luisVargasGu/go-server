@@ -61,7 +61,11 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	room := &types.Room{}
+	room := &types.Room{Clients: make(map[*types.Client]bool, 0)}
+	room.Register = make(chan *types.Client)
+	room.Unregister = make(chan *types.Client)
+	room.Broadcast = make(chan []byte)
+
 	err := utils.ParseJSON(r, room)
 	if err != nil {
 		log.Println("Invalid JSON")
@@ -75,7 +79,7 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error creating room", http.StatusInternalServerError)
 		return
 	}
-	
+
 	hub.HubInstance.AddRoom(room.ChannelID, room.ID, room)
 	utils.SendJSONResponse(w, http.StatusCreated, room)
 }
