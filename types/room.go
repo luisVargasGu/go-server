@@ -17,7 +17,7 @@ type RoomResponse struct {
 
 type RoomStore interface {
 	GetRoomsInChannel(channelID int) ([]*Room, error)
-	CreateRoom(room Room) error
+	CreateRoom(room *Room) error
 	DeleteRoom(roomID int) error
 }
 

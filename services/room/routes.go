@@ -60,7 +60,7 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	room := types.Room{}
+	room := &types.Room{}
 	err := utils.ParseJSON(r, room)
 	if err != nil {
 		log.Println("Invalid JSON")
