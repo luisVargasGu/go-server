@@ -60,12 +60,14 @@ func (s *Store) CreateRoom(room *types.Room) error {
 	return nil
 }
 
-func (s *Store) DeleteRoom(roomID int) error {
-	_, err := s.db.Exec(`DELETE FROM Rooms WHERE ID = $1`, roomID)
+func (s *Store) DeleteRoom(roomID int) (*types.Room, error) {
+	room := &types.Room{}
+	err := s.db.QueryRow(`DELETE FROM Rooms WHERE ID = $1
+			      RETURNING ChannelID`, roomID).Scan(&room.ChannelID)
 	if err != nil {
 		log.Println("Error deleting room")
-		return err
+		return nil, err
 	}
 
-	return nil
+	return room, nil
 }

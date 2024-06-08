@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"user/server/services/auth"
+	"user/server/services/hub"
 	"user/server/services/utils"
 	"user/server/types"
 
@@ -74,7 +75,8 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error creating room", http.StatusInternalServerError)
 		return
 	}
-
+	
+	hub.HubInstance.AddRoom(room.ChannelID, room.ID, room)
 	utils.SendJSONResponse(w, http.StatusCreated, room)
 }
 
@@ -87,12 +89,13 @@ func (h *Handler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.store.DeleteRoom(roomID)
+	room, err := h.store.DeleteRoom(roomID)
 	if err != nil {
 		log.Println("Error: ", err)
 		http.Error(w, "Error deleting room", http.StatusInternalServerError)
 		return
 	}
 
+	hub.HubInstance.RemoveRoom(room.ChannelID, roomID)
 	w.WriteHeader(http.StatusOK)
 }
