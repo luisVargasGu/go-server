@@ -15,14 +15,9 @@ type RoomResponse struct {
 	Rooms []*Room `json:"rooms"`
 }
 
-type CreateRoomPayload struct {
-	Name      string `json:"name" validate:"required"`
-	ChannelID int    `json:"channelID" validate:"required"`
-}
-
 type RoomStore interface {
 	GetRoomsInChannel(channelID int) ([]*Room, error)
-	CreateRoom(room CreateRoomPayload) error
+	CreateRoom(room Room) error
 	DeleteRoom(roomID int) error
 }
 
