@@ -58,17 +58,6 @@ func (h *Hub) RemoveChannel(channelID int) {
 	delete(h.Channels, channelID)
 }
 
-func (h *Hub) GetRoom(channelID, roomID int) *Room {
-	channel := h.GetChannel(channelID)
-	h.mu.RLock()
-	defer h.mu.Unlock()
-	room, ok := channel.Rooms[roomID]
-	if !ok {
-		return nil
-	}
-	return room
-}
-
 func (h *Hub) AddRoom(channelID, roomID int, room *Room) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
