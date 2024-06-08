@@ -8,6 +8,7 @@ import (
 
 func main() {
 	db.Db = db.DbConnect()
+	defer db.Db.Close()
 
 	server := api.NewAPIServer(":8080", db.Db)
 	if err := server.Run(); err != nil {
