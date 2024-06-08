@@ -25,8 +25,18 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 		utils.CorsHandler(h.GetRoomsInChannel),
 		h.userStore),
 	).Methods("GET")
-	r.HandleFunc("/rooms", h.CreateRoom).Methods("POST")
-	r.HandleFunc("/rooms/{roomID}", h.DeleteRoom).Methods("DELETE")
+
+	r.HandleFunc("/rooms",
+		utils.CorsHandler(
+			auth.WithJWTAuth(h.CreateRoom,
+				h.userStore),
+		)).Methods("POST", "OPTIONS")
+
+	r.HandleFunc("/rooms/{roomID}",
+		utils.CorsHandler(
+			auth.WithJWTAuth(h.DeleteRoom,
+				h.userStore),
+		)).Methods("DELETE", "OPTIONS")
 }
 
 func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +60,7 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	room := types.CreateRoomPayload{}
+	room := types.Room{}
 	err := utils.ParseJSON(r, room)
 	if err != nil {
 		log.Println("Invalid JSON")
@@ -60,7 +70,7 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	err = h.store.CreateRoom(room)
 	if err != nil {
-		log.Println("Error creating room")
+		log.Println("Error: ", err)
 		http.Error(w, "Error creating room", http.StatusInternalServerError)
 		return
 	}
@@ -79,7 +89,7 @@ func (h *Handler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 
 	err = h.store.DeleteRoom(roomID)
 	if err != nil {
-		log.Println("Error deleting room")
+		log.Println("Error: ", err)
 		http.Error(w, "Error deleting room", http.StatusInternalServerError)
 		return
 	}
