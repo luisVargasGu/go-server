@@ -2,8 +2,8 @@ package types
 
 import (
 	"encoding/json"
-	"log"
 	"github.com/gorilla/websocket"
+	"log"
 )
 
 type Client struct {
@@ -20,7 +20,16 @@ func (c *Client) ReadMessages(room *Room, store MessageStore) {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			log.Println("Error reading from WebSocket:", err)
+			if websocket.IsCloseError(
+				err,
+				websocket.CloseNormalClosure,
+				websocket.CloseGoingAway,
+				websocket.CloseNoStatusReceived,
+			) {
+				log.Printf("WebSocket closed: %v", err)
+			} else {
+				log.Printf("Error reading from WebSocket: %v", err)
+			}
 			break
 		}
 
