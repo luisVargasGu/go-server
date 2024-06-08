@@ -7,12 +7,8 @@ import (
 	"user/server/types"
 )
 
-type Hub struct {
-	Channels map[int]*types.Channel
-}
-
 var (
-	HubInstance *Hub
+	HubInstance *types.Hub
 	once        sync.Once
 )
 
@@ -32,14 +28,14 @@ func NewHandler(store types.HubStore, channelStore types.ChannelStore, roomStore
 	return &Handler{store: store, channelStore: channelStore, roomStore: roomStore, userStore: userStore}
 }
 
-func (h *Handler) HubInitialize() *Hub {
+func (h *Handler) HubInitialize() *types.Hub {
 	once.Do(func() {
 		channels, err := h.channelStore.GetAllChannels()
 		if err != nil {
 			log.Println("Error getting all channels during Hub initialize")
 			return
 		}
-		HubInstance = &Hub{
+		HubInstance = &types.Hub{
 			Channels: make(map[int]*types.Channel),
 		}
 
@@ -63,32 +59,4 @@ func (h *Handler) HubInitialize() *Hub {
 		go HubInstance.Run()
 	})
 	return HubInstance
-}
-
-// TODO: Get rid of channel iteration (it's one hub per channel)
-func (h *Hub) Run() {
-	for _, channel := range h.Channels {
-		for _, room := range channel.Rooms {
-			for {
-				select {
-				case client := <-room.Register:
-					room.Clients[client] = true
-				case client := <-room.Unregister:
-					if _, ok := room.Clients[client]; ok {
-						delete(room.Clients, client)
-						close(client.Send)
-					}
-				case message := <-room.Broadcast:
-					for client := range room.Clients {
-						select {
-						case client.Send <- message:
-						default:
-							delete(room.Clients, client)
-							close(client.Send)
-						}
-					}
-				}
-			}
-		}
-	}
 }
