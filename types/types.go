@@ -11,12 +11,6 @@ type User struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-type Channel struct {
-	ID    int           `json:"id"`
-	Name  string        `json:"name"`
-	Rooms map[int]*Room `json:"-"`
-}
-
 type Message struct {
 	ID        int       `json:"id"`
 	RoomID    int       `json:"room_id"`
@@ -42,13 +36,6 @@ type UserStore interface {
 type HubStore interface {
 }
 
-type ChannelStore interface {
-	GetAllChannels() ([]*Channel, error)
-	GetChannelsForUser(userID int) ([]*Channel, error)
-	CreateChannel(channel *Channel, user *User) error
-	DeleteChannel(channelID int) error
-}
-
 type LoginUserPayload struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
@@ -61,10 +48,6 @@ type RegisterUserPayload struct {
 
 type MessagesResponse struct {
 	Messages []*Message `json:"messages"`
-}
-
-type ChannelResponse struct {
-	Channels []*Channel `json:"channels"`
 }
 
 type LoginResponse struct {
