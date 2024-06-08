@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"user/server/services/auth"
+	"user/server/services/hub"
 	"user/server/services/utils"
 	"user/server/types"
 
@@ -68,6 +69,7 @@ func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hub.HubInstance.AddChannel(channel)
 	utils.SendJSONResponse(w, http.StatusCreated, channel)
 }
 
@@ -87,5 +89,6 @@ func (h *Handler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hub.HubInstance.RemoveChannel(channelID)
 	w.WriteHeader(http.StatusOK)
 }
