@@ -43,18 +43,21 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	if channel == nil {
 		http.Error(w, "Channel not found", http.StatusNotFound)
 		log.Println("Channel not found")
+		return
 	}
 
 	room := channel.GetRoom(roomID)
 	if room == nil {
 		http.Error(w, "Room not found", http.StatusNotFound)
 		log.Println("Room not found")
+		return
 	}
 
 	ws, err := utils.UpgradeToWebSocket(w, r)
 	if err != nil {
 		http.Error(w, "Could not open WebSocket connection", http.StatusBadRequest)
 		log.Println("Could not open WebSocket connection: ", err)
+		return
 	}
 
 	user := auth.GetUserFromContext(r.Context())
