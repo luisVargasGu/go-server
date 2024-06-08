@@ -25,11 +25,16 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 		utils.CorsHandler(h.GetChannelsForUser),
 		h.userStore),
 	).Methods("GET")
+
 	r.HandleFunc("/channels", utils.CorsHandler(
 		auth.WithJWTAuth(h.CreateChannel,
-		h.userStore),
+			h.userStore),
 	)).Methods("POST", "OPTIONS")
-	r.HandleFunc("/channels/{channelID}", auth.WithJWTAuth(h.DeleteChannel, h.userStore)).Methods("DELETE")
+	
+	r.HandleFunc("/channels/{channelID}", utils.CorsHandler(
+		auth.WithJWTAuth(h.DeleteChannel,
+			h.userStore),
+	)).Methods("DELETE", "OPTIONS")
 }
 
 func (h *Handler) GetChannelsForUser(w http.ResponseWriter, r *http.Request) {

@@ -65,9 +65,8 @@ func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 
 func (s *Store) CreateChannel(channel *types.Channel, user *types.User) error {
 	err := s.db.QueryRow(`INSERT INTO Channels (Name) VALUES ($1)
-			      RETURNING ID, Name`,
-		channel.Name).Scan(&channel.ID,
-		&channel.Name)
+			      RETURNING ID`,
+		channel.Name).Scan(&channel.ID)
 	if err != nil {
 		log.Println("Error creating channel")
 		return err
