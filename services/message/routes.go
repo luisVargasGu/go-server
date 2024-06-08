@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strconv"
@@ -9,7 +10,6 @@ import (
 	"user/server/services/hub"
 	"user/server/services/utils"
 	"user/server/types"
-	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -39,10 +39,18 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel := hub.HubInstance.Channels[channelID]
-	room := channel.Rooms[roomID]
+	channel := hub.HubInstance.GetChannel(channelID)
+	if channel == nil {
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		log.Println("Channel not found")
+	}
 
-	// Upgrade this connection to a WebSocket
+	room := channel.GetRoom(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		log.Println("Room not found")
+	}
+
 	ws, err := utils.UpgradeToWebSocket(w, r)
 	if err != nil {
 		http.Error(w, "Could not open WebSocket connection", http.StatusBadRequest)
@@ -51,7 +59,6 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.GetUserFromContext(r.Context())
 
-	// Create a new client
 	client := hub.NewClient(ws, fmt.Sprint(user.ID), fmt.Sprint(user.Username))
 	room.Register <- client
 
@@ -77,4 +84,3 @@ func (h *Handler) FetchMessages(w http.ResponseWriter, r *http.Request) {
 	response := types.MessagesResponse{Messages: messages}
 	utils.SendJSONResponse(w, http.StatusOK, response)
 }
-
