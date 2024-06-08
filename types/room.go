@@ -1,14 +1,14 @@
 package types
 
 type Room struct {
-    ID         int            `json:"id"`
-    Name       string         `json:"name"`
-    ChannelID  int            `json:"channel_id"`
-    Clients    map[*Client]bool `json:"-"`
-    Messages   []*Message     `json:"-"`
-    Register   chan *Client   `json:"-"`
-    Unregister chan *Client   `json:"-"`
-    Broadcast  chan []byte    `json:"-"`
+	ID         int              `json:"id"`
+	Name       string           `json:"name"`
+	ChannelID  int              `json:"channel_id"`
+	Clients    map[*Client]bool `json:"-"`
+	Messages   []*Message       `json:"-"`
+	Register   chan *Client     `json:"-"`
+	Unregister chan *Client     `json:"-"`
+	Broadcast  chan []byte      `json:"-"`
 }
 
 type RoomResponse struct {
@@ -18,7 +18,7 @@ type RoomResponse struct {
 type RoomStore interface {
 	GetRoomsInChannel(channelID int) ([]*Room, error)
 	CreateRoom(room *Room) error
-	DeleteRoom(roomID int) error
+	DeleteRoom(roomID int) (*Room, error)
 }
 
 func (r *Room) Run() {
