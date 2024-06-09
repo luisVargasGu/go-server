@@ -56,7 +56,6 @@ func (h *Handler) HubInitialize() *types.Hub {
 				go room.Run()
 			}
 		}
-		go HubInstance.Run()
 	})
 	return HubInstance
 }
