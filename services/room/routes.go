@@ -61,7 +61,7 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	room := &types.Room{Clients: make(map[*types.Client]bool, 0)}
+	room := &types.Room{Clients: make(map[*types.Client]bool)}
 	room.Register = make(chan *types.Client)
 	room.Unregister = make(chan *types.Client)
 	room.Broadcast = make(chan []byte)
@@ -80,6 +80,7 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go room.Run();
 	hub.HubInstance.AddRoom(room.ChannelID, room.ID, room)
 	utils.SendJSONResponse(w, http.StatusCreated, room)
 }
