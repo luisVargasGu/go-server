@@ -16,6 +16,7 @@ type Client struct {
 func (c *Client) ReadMessages(room *Room, store MessageStore) {
 	defer func() {
 		c.Conn.Close()
+		room.Unregister <- c
 	}()
 	for {
 		_, message, err := c.Conn.ReadMessage()
@@ -30,7 +31,7 @@ func (c *Client) ReadMessages(room *Room, store MessageStore) {
 			} else {
 				log.Printf("Error reading from WebSocket: %v", err)
 			}
-			break
+			return
 		}
 
 		var msg Message
