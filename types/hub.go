@@ -8,34 +8,6 @@ type Hub struct {
 	Channels map[int]*Channel
 }
 
-// TODO: Get rid of channel iteration (it's one hub per channel)
-func (h *Hub) Run() {
-	for _, channel := range h.Channels {
-		for _, room := range channel.Rooms {
-			for {
-				select {
-				case client := <-room.Register:
-					room.Clients[client] = true
-				case client := <-room.Unregister:
-					if _, ok := room.Clients[client]; ok {
-						delete(room.Clients, client)
-						close(client.Send)
-					}
-				case message := <-room.Broadcast:
-					for client := range room.Clients {
-						select {
-						case client.Send <- message:
-						default:
-							delete(room.Clients, client)
-							close(client.Send)
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
 func (h *Hub) GetChannel(channelID int) *Channel {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
