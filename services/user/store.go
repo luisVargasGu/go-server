@@ -28,7 +28,11 @@ func (s *Store) CreateUser(user types.User) (int, error) {
 	}
 
 	var userID int
-	err = s.db.QueryRow(`INSERT INTO Users (Username, Password) VALUES ($1, $2) RETURNING ID`, user.Username, user.Password).Scan(&userID)
+	err = s.db.QueryRow(`
+				INSERT INTO Users 
+				(Username, Password, Avatar) 
+				VALUES ($1, $2, $3) RETURNING ID`,
+		user.Username, user.Password, user.Avatar).Scan(&userID)
 	if err != nil {
 		log.Println("Error creating user")
 		return -1, err
@@ -36,6 +40,7 @@ func (s *Store) CreateUser(user types.User) (int, error) {
 	return userID, nil
 }
 
+// TODO: don't fetch password
 func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 	rows, err := s.db.Query("SELECT * FROM Users WHERE Username = $1", username)
 	if err != nil {
@@ -45,7 +50,7 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 
 	user := new(types.User)
 	for rows.Next() {
-		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)
+		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt, &user.Avatar)
 		if err != nil {
 			log.Println("Error scanning rows: ", err)
 			return nil, err
@@ -69,7 +74,7 @@ func (s *Store) GetUserByID(userID int) (*types.User, error) {
 
 	user := new(types.User)
 	for rows.Next() {
-		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)
+		err = rows.Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt, &user.Avatar)
 		if err != nil {
 			log.Println("Error scanning rows: ", err)
 			return nil, err
