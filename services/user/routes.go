@@ -2,15 +2,17 @@ package user
 
 import (
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"user/server/services/auth"
+	"user/server/services/image"
 	"user/server/services/utils"
 	"user/server/types"
+
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -26,103 +28,123 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/register", utils.CorsHandler(h.RegisterHandler)).Methods("POST", "OPTIONS")
 }
 
+func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+
+	user, err := decodeRegisterRequestBody(r)
+	if err != nil {
+		handleError(w, "Invalid request payload", http.StatusBadRequest, err)
+		return
+	}
+
+	profilePictureData, err := validateAndDecodeImage(user.Avatar)
+	if err != nil {
+		handleError(w, "Invalid base64 image", http.StatusBadRequest, err)
+		return
+	}
+
+	hashedPassword, err := hashUserPassword(user.Password)
+	if err != nil {
+		handleError(w, "Internal server error", http.StatusInternalServerError, err)
+		return
+	}
+
+	userID, err := createUserInStore(h.store, user.Email, hashedPassword, profilePictureData)
+	if err != nil {
+		handleError(w, "Failed to register user, please try again.", http.StatusInternalServerError, err)
+		return
+	}
+
+	token, err := generateJWTToken(userID)
+	if err != nil {
+		handleError(w, "Error generating JWT token", http.StatusInternalServerError, err)
+		return
+	}
+
+	setJWTCookie(w, origin, token)
+
+	prepareResponse(w, userID, user.Avatar, "User registered successfully", http.StatusCreated)
+}
+
 func (h *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 
-	var creds types.LoginUserPayload
-	err := json.NewDecoder(r.Body).Decode(&creds)
+	creds, err := decodeAuthRequestBody(r)
 	if err != nil {
-		log.Println("Error decoding request body: ", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		handleError(w, "Invalid request body", http.StatusBadRequest, err)
 		return
 	}
 
-	user, err := h.store.GetUserByEmail(creds.Email)
+	user, err := getUserByEmail(h.store, creds.Email)
 	if err != nil {
-		log.Println("Error getting user by email: ", err)
-		http.Error(w, "Error getting user by email", http.StatusUnauthorized)
+		handleError(w, "Error getting user by email", http.StatusUnauthorized, err)
 		return
 	}
 
-	if !auth.ComparePasswords(user.Password, []byte(creds.Password)) {
-		log.Println("Invalid credentials")
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+	if !comparePasswords(user.Password, []byte(creds.Password)) {
+		handleError(w, "Invalid credentials", http.StatusUnauthorized, nil)
 		return
 	}
 
-	token, err := auth.GenerateJWTToken(strconv.Itoa(int(user.ID)))
+	token, err := generateJWTToken(int(user.ID))
 	if err != nil {
-		log.Println("Error generating JWT token: ", err)
-		http.Error(w, "Error generating JWT token", http.StatusInternalServerError)
+		handleError(w, "Error generating JWT token", http.StatusInternalServerError, err)
 		return
 	}
 
-	parts := strings.Split(origin, "://")
-	domain := "localhost"
-	if len(parts) > 1 {
-		domainParts := strings.Split(parts[1], ":")
-		domain = domainParts[0]
-	}
+	setJWTCookie(w, origin, token)
 
-	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "jwt_token",
-		Value:   token,
-		Expires: time.Now().Add(24 * time.Hour),
-		Domain:  domain,
-		Path:    "/",
-	})
-
-	response := types.LoginResponse{
-		Success: true,
-		Message: "Authentication successful",
-		UserID:  user.ID,
-	}
-
-	utils.SendJSONResponse(w, http.StatusOK, response)
+	prepareResponse(w, int(user.ID), image.EncodeB64Image(user.Avatar), "Authentication successful", http.StatusOK)
 }
 
-func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	var user types.RegisterUserPayload
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		log.Println("Error decoding request body: ", err)
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		return
-	}
+func decodeRegisterRequestBody(r *http.Request) (*types.RegisterUserPayload, error) {
+	user := &types.RegisterUserPayload{}
+	err := json.NewDecoder(r.Body).Decode(user)
+	return user, err
+}
 
-	hashedPassword, err := auth.HashPassword(user.Password)
-	log.Println("User:", user)
-	userID, err := h.store.CreateUser(types.User{Username: user.Email, Password: hashedPassword})
-	if err != nil {
-		log.Println("Error registering user: ", err)
-		http.Error(w, "Failed to register user, please try again.", http.StatusInternalServerError)
-		return
-	}
+func decodeAuthRequestBody(r *http.Request) (*types.LoginUserPayload, error) {
+	creds := &types.LoginUserPayload{}
+	err := json.NewDecoder(r.Body).Decode(creds)
+	return creds, err
+}
 
-	token, err := auth.GenerateJWTToken(strconv.Itoa(userID))
-	if err != nil {
-		log.Println("Error generating JWT token: ", err)
-		http.Error(w, "Error generating JWT token", http.StatusInternalServerError)
-		return
-	}
+func validateAndDecodeImage(base64Image string) ([]byte, error) {
+	return image.DecodeB64Image(base64Image)
+}
 
+func hashUserPassword(password string) (string, error) {
+	return auth.HashPassword(password)
+}
+
+func createUserInStore(store types.UserStore, email, hashedPassword string, profilePictureData []byte) (int, error) {
+	user := types.User{
+		Username: email,
+		Password: hashedPassword,
+		Avatar:   profilePictureData,
+	}
+	return store.CreateUser(user)
+}
+
+func getUserByEmail(store types.UserStore, email string) (*types.User, error) {
+	return store.GetUserByEmail(email)
+}
+
+func comparePasswords(hashedPassword string, plainPassword []byte) bool {
+	return auth.ComparePasswords(hashedPassword, plainPassword)
+}
+
+func generateJWTToken(userID int) (string, error) {
+	return auth.GenerateJWTToken(strconv.Itoa(userID))
+}
+
+func setJWTCookie(w http.ResponseWriter, origin, token string) {
 	parts := strings.Split(origin, "://")
 	domain := "localhost"
 	if len(parts) > 1 {
 		domainParts := strings.Split(parts[1], ":")
 		domain = domainParts[0]
 	}
-
-	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 	http.SetCookie(w, &http.Cookie{
 		Name:    "jwt_token",
@@ -131,12 +153,24 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Domain:  domain,
 		Path:    "/",
 	})
+}
 
+func prepareResponse(w http.ResponseWriter, userID int, avatar string, message string, statusCode int) {
 	response := types.LoginResponse{
 		Success: true,
-		Message: "User registered successfully",
+		Message: message,
 		UserID:  userID,
+		Avatar:  avatar,
 	}
 
-	utils.SendJSONResponse(w, http.StatusCreated, response)
+	utils.SendJSONResponse(w, statusCode, response)
+}
+
+func handleError(w http.ResponseWriter, message string, statusCode int, err error) {
+	if err != nil {
+		log.Println(message, err)
+	} else {
+		log.Println(message)
+	}
+	http.Error(w, message, statusCode)
 }
