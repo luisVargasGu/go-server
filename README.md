@@ -47,4 +47,4 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
 
 ## User Flow
 
-![User chat flow](https://github.com/luisVargasGu/go-server/blob/main/images/Chat.png)
+![User chat flow](https://github.com/luisVargasGu/go-server/blob/main/assets/Chat.png)
