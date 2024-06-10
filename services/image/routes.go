@@ -1,18 +1,18 @@
 package image
 
 import (
-	_ "github.com/lib/pq"
+	"encoding/base64"
 	"io"
 	"log"
 	"net/http"
-        "path/filepath"
 	"os"
+	"path/filepath"
 )
 
 func ImageHandler(w http.ResponseWriter, r *http.Request) {
 	imageID := r.URL.Query().Get("id")
 	relativePath := "./assets/" + imageID + ".jpg"
-        imagePath, _ := filepath.Abs(relativePath)
+	imagePath, _ := filepath.Abs(relativePath)
 
 	file, err := os.Open(imagePath)
 	if err != nil {
@@ -28,4 +28,12 @@ func ImageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error serving image", http.StatusInternalServerError)
 		return
 	}
+}
+
+func DecodeB64Image(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(s)
+}
+
+func EncodeB64Image(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }
