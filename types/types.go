@@ -8,16 +8,19 @@ type User struct {
 	ID        int       `json:"id"`
 	Username  string    `json:"email"`
 	Password  string    `json:"-"`
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time `json:"created_at"`
+	Avatar    []byte    `json:"avatar"`
 }
 
 type Message struct {
-	ID        int       `json:"id"`
-	RoomID    int       `json:"room_id"`
-	SenderID  int       `json:"sender_id"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
-	IsRead    bool      `json:"is_read"`
+	ID           int       `json:"id"`
+	RoomID       int       `json:"room_id"`
+	SenderID     int       `json:"sender_id"`
+	SenderName   string    `json:"sender_name"`
+	SenderAvatar string    `json:"sender_avatar"`
+	Content      string    `json:"content"`
+	Timestamp    time.Time `json:"timestamp"`
+	IsRead       bool      `json:"is_read"`
 }
 
 type MessageStore interface {
@@ -44,6 +47,7 @@ type LoginUserPayload struct {
 type RegisterUserPayload struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+	Avatar   string `json:"avatar"`
 }
 
 type MessagesResponse struct {
@@ -54,4 +58,5 @@ type LoginResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 	UserID  int    `json:"user_id"`
+	Avatar  string `json:"avatar"`
 }
