@@ -3,6 +3,7 @@ package message
 import (
 	"database/sql"
 	"log"
+	"user/server/services/image"
 	"user/server/types"
 )
 
@@ -15,7 +16,20 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
-	rows, err := s.db.Query("SELECT * FROM Messages WHERE RoomID = $1", roomID)
+	rows, err := s.db.Query(`
+				SELECT 
+			Messages.ID, 
+			Messages.RoomID, 
+			Messages.SenderID, 
+			Messages.Content, 
+			Messages.Timestamp, 
+			Messages.IsRead, 
+			Users.Avatar, 
+			Users.Username 
+		FROM Messages 
+		JOIN Users ON Users.ID = Messages.SenderID 
+		WHERE RoomID = $1	
+				`, roomID)
 	if err != nil {
 		log.Println("Error getting messages in room: ", err)
 		return nil, err
@@ -25,7 +39,17 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	messages := make([]*types.Message, 0)
 	for rows.Next() {
 		m := &types.Message{}
-		err := rows.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Content, &m.Timestamp, &m.IsRead)
+		avatarBytes := &[]byte{}
+		err := rows.Scan(
+			&m.ID,
+			&m.RoomID,
+			&m.SenderID,
+			&m.Content,
+			&m.Timestamp,
+			&m.IsRead,
+			&avatarBytes,
+			&m.SenderName)
+		m.SenderAvatar = image.EncodeB64Image(*avatarBytes)
 		if err != nil {
 			log.Println("Error scanning message row: ", err)
 			return nil, err
