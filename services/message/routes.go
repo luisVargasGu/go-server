@@ -27,6 +27,12 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 		utils.CorsHandler(h.FetchMessages),
 		h.userStore),
 	).Methods("GET")
+	r.HandleFunc("/messages/{messageID}/seen", utils.CorsHandler(
+		auth.WithJWTAuth(
+			h.MarkMessageAsSeenHandler,
+			h.userStore,
+		),
+	)).Methods("PUT", "OPTIONS")
 }
 
 func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
@@ -86,4 +92,24 @@ func (h *Handler) FetchMessages(w http.ResponseWriter, r *http.Request) {
 
 	response := types.MessagesResponse{Messages: messages}
 	utils.SendJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) MarkMessageAsSeenHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	user := auth.GetUserFromContext(r.Context())
+	messageID, err := strconv.Atoi(vars["messageID"])
+	if err != nil {
+		log.Println("Invalid message ID", err)
+		http.Error(w, "Invalid message ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.store.MarkMessageAsSeen(user.ID, messageID)
+	if err != nil {
+		log.Println("Error marking message as seen:", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
