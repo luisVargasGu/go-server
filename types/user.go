@@ -12,20 +12,9 @@ type User struct {
 	Avatar    []byte    `json:"avatar"`
 }
 
-type Message struct {
-	ID           int       `json:"id"`
-	RoomID       int       `json:"room_id"`
-	SenderID     int       `json:"sender_id"`
-	SenderName   string    `json:"sender_name"`
-	SenderAvatar string    `json:"sender_avatar"`
-	Content      string    `json:"content"`
-	Timestamp    time.Time `json:"timestamp"`
-	IsRead       bool      `json:"is_read"`
-}
-
-type MessageStore interface {
-	GetMessagesInRoom(roomID int) ([]*Message, error)
-	CreateMessage(message Message) error
+type SeenByUser struct {
+	Avatar   string `json:"avatar"`
+	Username string `json:"username"`
 }
 
 type UserStore interface {
@@ -48,10 +37,6 @@ type RegisterUserPayload struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
 	Avatar   string `json:"avatar"`
-}
-
-type MessagesResponse struct {
-	Messages []*Message `json:"messages"`
 }
 
 type LoginResponse struct {
