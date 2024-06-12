@@ -1,9 +1,9 @@
 package types
 
 import (
-	"encoding/json"
-	"github.com/gorilla/websocket"
 	"log"
+	"user/server/services/utils"
+	"github.com/gorilla/websocket"
 )
 
 type Client struct {
@@ -35,7 +35,7 @@ func (c *Client) ReadMessages(room *Room, store MessageStore) {
 		}
 
 		var msg Message
-		err = json.Unmarshal(message, &msg)
+		err = utils.Unmarshal(message, &msg)
 		if err != nil {
 			log.Println("Error unmarshalling JSON message", err)
 			return

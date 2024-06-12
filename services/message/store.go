@@ -2,9 +2,9 @@ package message
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"user/server/services/image"
+	"user/server/services/utils"
 	"user/server/types"
 )
 
@@ -70,7 +70,7 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 			Avatar   []byte `json:"avatar"`
 			Username string `json:"username"`
 		}
-		err = json.Unmarshal([]byte(seenByJson), &seenBy)
+		err = utils.Unmarshal([]byte(seenByJson), &seenBy)
 		if err != nil {
 			log.Println("Error unmarshalling seen by data: ", err)
 			return nil, err

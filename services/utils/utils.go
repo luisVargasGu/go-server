@@ -59,3 +59,7 @@ func UpgradeToWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn
 	}
 	return ws, nil
 }
+
+func Unmarshal(d []byte, v any) error {
+	return json.Unmarshal(d, v)
+}
