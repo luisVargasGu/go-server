@@ -2,6 +2,7 @@ package message
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"user/server/services/image"
 	"user/server/types"
@@ -17,19 +18,25 @@ func NewStore(db *sql.DB) *Store {
 
 func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	rows, err := s.db.Query(`
-				SELECT 
-			Messages.ID, 
-			Messages.RoomID, 
-			Messages.SenderID, 
-			Messages.Content, 
-			Messages.Timestamp, 
-			Messages.IsRead, 
-			Users.Avatar, 
-			Users.Username 
-		FROM Messages 
-		JOIN Users ON Users.ID = Messages.SenderID 
-		WHERE RoomID = $1	
-				`, roomID)
+		SELECT 
+			m.ID, 
+			m.RoomID, 
+			m.SenderID, 
+			m.Content, 
+			m.Timestamp, 
+			m.IsRead, 
+			u.Avatar, 
+			u.Username,
+			COALESCE(json_agg(json_build_object(
+			'avatar', encode(su.Avatar, 'base64'),
+			'username', su.Username)) FILTER (WHERE su.ID IS NOT NULL), '[]') as SeenBy
+		FROM Messages m
+		JOIN Users u ON u.ID = m.SenderID
+		LEFT JOIN SeenMessages sm ON sm.message_id = m.ID
+		LEFT JOIN Users su ON su.ID = sm.user_id
+		WHERE m.RoomID = $1
+		GROUP BY m.ID, u.Avatar, u.Username
+	`, roomID)
 	if err != nil {
 		log.Println("Error getting messages in room: ", err)
 		return nil, err
@@ -39,7 +46,9 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	messages := make([]*types.Message, 0)
 	for rows.Next() {
 		m := &types.Message{}
-		avatarBytes := &[]byte{}
+		var avatarBytes []byte
+		var seenByJson string
+
 		err := rows.Scan(
 			&m.ID,
 			&m.RoomID,
@@ -48,11 +57,31 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 			&m.Timestamp,
 			&m.IsRead,
 			&avatarBytes,
-			&m.SenderName)
-		m.SenderAvatar = image.EncodeB64Image(*avatarBytes)
+			&m.SenderName,
+			&seenByJson)
 		if err != nil {
 			log.Println("Error scanning message row: ", err)
 			return nil, err
+		}
+
+		m.SenderAvatar = image.EncodeB64Image(avatarBytes)
+
+		var seenBy []struct {
+			Avatar   []byte `json:"avatar"`
+			Username string `json:"username"`
+		}
+		err = json.Unmarshal([]byte(seenByJson), &seenBy)
+		if err != nil {
+			log.Println("Error unmarshalling seen by data: ", err)
+			return nil, err
+		}
+
+		m.SeenBy = make([]types.SeenByUser, len(seenBy))
+		for i, sb := range seenBy {
+			m.SeenBy[i] = types.SeenByUser{
+				Avatar:   image.EncodeB64Image(sb.Avatar),
+				Username: sb.Username,
+			}
 		}
 		messages = append(messages, m)
 	}
@@ -68,4 +97,19 @@ func (s *Store) CreateMessage(m types.Message) error {
 		return err
 	}
 	return nil
+}
+
+// TODO: change to use websocket to do this kind of update
+func (s *Store) MarkMessageAsSeen(userID int, messageID int) error {
+	_, err := s.db.Exec(`
+        INSERT INTO SeenMessages (message_id, user_id)
+        VALUES ($1, $2)
+        ON CONFLICT (message_id, user_id) DO NOTHING
+    `, messageID, userID)
+	if err != nil {
+		log.Println("Error marking message as seen:", err)
+		return err
+	}
+
+	return err
 }
