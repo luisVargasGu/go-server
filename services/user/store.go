@@ -46,7 +46,7 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 	defer rows.Close()
 	if err != nil {
 		log.Println("Error querying database: ", err)
-		return nil, err // User not found
+		return nil, err
 	}
 
 	user := new(types.User)
@@ -58,7 +58,6 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 		}
 
 		if err == nil {
-			// Authentication successful, return the user ID
 			return user, nil
 		}
 	}
@@ -71,7 +70,7 @@ func (s *Store) GetUserByID(userID int) (*types.User, error) {
 	defer rows.Close()
 	if err != nil {
 		log.Println("Error querying database: ", err)
-		return nil, err // User not found
+		return nil, err
 	}
 
 	user := new(types.User)
@@ -83,7 +82,6 @@ func (s *Store) GetUserByID(userID int) (*types.User, error) {
 		}
 
 		if err == nil {
-			// Authentication successful, return the user ID
 			return user, nil
 		}
 	}
