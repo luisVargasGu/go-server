@@ -37,6 +37,15 @@ CREATE TABLE Messages (
     FOREIGN KEY (SenderID) REFERENCES Users(ID)
 );
 
+CREATE TABLE SeenMessages (
+	user_id INT NOT NULL,
+	message_id INT NOT NULL,
+	seen_time_stamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (user_id, message_id),
+	FOREIGN KEY (user_id) REFERENCES Users(ID),
+	FOREIGN KEY (message_id) REFERENCES Messages(ID)
+);
+
 CREATE TABLE ChannelsToUsers (
     user_id INT,
     channel_id INT,
