@@ -46,11 +46,13 @@ func (s *APIServer) Run() error {
 	messageHandler := message.NewHandler(messageStore, userStore)
 	messageHandler.RegisterRoutes(subrouter)
 
+	imageStore := image.NewStore(s.db)
+	imageHandler := image.NewHandler(imageStore, userStore)
+	imageHandler.RegisterRoutes(subrouter)
+
 	hubStore := hub.NewStore(s.db)
 	hubHandler := hub.NewHandler(hubStore, channelStore, roomStore, userStore)
 	hubHandler.HubInitialize()
-
-	subrouter.HandleFunc("/image", image.ImageHandler)
 
 	log.Println("Starting server on", s.addr)
 	return http.ListenAndServe(s.addr, router)
