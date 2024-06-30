@@ -1,11 +1,14 @@
 package channel
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"user/server/services/auth"
 	"user/server/services/hub"
+	"user/server/services/image"
 	"user/server/services/utils"
 	"user/server/types"
 
@@ -54,12 +57,46 @@ func (h *Handler) GetChannelsForUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUserFromContext(r.Context())
 
-	channel := &types.Channel{ Rooms: make(map[int]*types.Room, 0) }
-	err := utils.ParseJSON(r, channel)
+	err := r.ParseMultipartForm(image.MAX_UPLOAD_SIZE)
 	if err != nil {
-		log.Println("Invalid JSON")
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		log.Println("Error parsing multipart form: ", err)
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+	}
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		log.Println("Error retrieving file: ", err)
+		http.Error(w, "Unable to retrieve file from form", http.StatusBadRequest)
 		return
+	}
+	defer file.Close()
+
+	fileType := handler.Header.Get("Content-Type")
+	if !strings.HasPrefix(fileType, "image/") {
+		log.Println("Invalid file type: ", fileType)
+		http.Error(w, "The uploaded file is not an image", http.StatusBadRequest)
+		return
+	}
+
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		log.Println("Error reading file data: ", err)
+		http.Error(w, "Error reading file data", http.StatusInternalServerError)
+		return
+	}
+
+	data, err := image.ResizeImage(fileData, image.MAX_WIDTH, image.MAX_HEIGHT)
+	if err != nil {
+		log.Println("Error getting file data: ", err)
+		http.Error(w, "Error getting file data", http.StatusInternalServerError)
+		return
+	}
+	channelName := r.FormValue("name")
+
+	channel := &types.Channel{
+		Name:  channelName,
+		Rooms: make(map[int]*types.Room, 0),
+		Avatar: data,
 	}
 
 	err = h.store.CreateChannel(channel, user)
