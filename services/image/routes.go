@@ -8,7 +8,6 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -70,7 +69,7 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the file data into a byte array
-	fileData, err := ioutil.ReadAll(file)
+	fileData, err := io.ReadAll(file)
 	if err != nil {
 		log.Println("Error reading file data: ", err)
 		http.Error(w, "Error reading file data", http.StatusInternalServerError)
