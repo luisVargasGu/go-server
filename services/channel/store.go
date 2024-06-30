@@ -15,7 +15,7 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) GetAllChannels() ([]*types.Channel, error) {
-	rows, err := s.db.Query(`SELECT * FROM Channels`)
+	rows, err := s.db.Query(`SELECT ID, Name FROM Channels`)
 
 	if err != nil {
 		log.Println("Error getting all channels")
@@ -52,7 +52,7 @@ func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 	channels := make([]*types.Channel, 0)
 	for rows.Next() {
 		channel := &types.Channel{}
-		err := rows.Scan(&channel.ID, &channel.Name)
+		err := rows.Scan(&channel.ID, &channel.Name, &channel.Avatar)
 		if err != nil {
 			log.Println("Error scanning channel")
 			return nil, err
@@ -64,9 +64,9 @@ func (s *Store) GetChannelsForUser(userID int) ([]*types.Channel, error) {
 }
 
 func (s *Store) CreateChannel(channel *types.Channel, user *types.User) error {
-	err := s.db.QueryRow(`INSERT INTO Channels (Name) VALUES ($1)
+	err := s.db.QueryRow(`INSERT INTO Channels (Name, Avatar) VALUES ($1, $2)
 			      RETURNING ID`,
-		channel.Name).Scan(&channel.ID)
+		channel.Name, channel.Avatar).Scan(&channel.ID)
 	if err != nil {
 		log.Println("Error creating channel")
 		return err

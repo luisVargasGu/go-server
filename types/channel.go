@@ -7,6 +7,7 @@ type Channel struct {
 	ID    int           `json:"id"`
 	Name  string        `json:"name"`
 	Rooms map[int]*Room `json:"-"`
+	Avatar    []byte    `json:"avatar"`
 }
 
 type ChannelStore interface {
