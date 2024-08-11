@@ -38,6 +38,23 @@ CREATE TABLE Messages (
     FOREIGN KEY (SenderID) REFERENCES Users(ID)
 );
 
+CREATE TABLE Invites (
+	ID SERIAL PRIMARY KEY,
+	ChannelID INT NOT NULL,
+	InviterID INT NOT NULL,
+	InviteeID INT NOT NULL,
+	Status VARCHAR(20) NOT NULL CHECK (Status IN ('pending', 'accepted', 'expired')),
+	Expiration TIMESTAMP NOT NULL,
+	CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT fk_channel
+		FOREIGN KEY (ChannelID) REFERENCES Channels(ID),
+	CONSTRAINT fk_inviter
+		FOREIGN KEY (InviterID) REFERENCES Users(ID),
+	CONSTRAINT fk_invitee
+		FOREIGN KEY (InviteeID) REFERENCES Users(ID),
+	UNIQUE (ChannelID, InviteeID)
+);
+
 CREATE TABLE SeenMessages (
 	user_id INT NOT NULL,
 	message_id INT NOT NULL,
@@ -70,3 +87,8 @@ CREATE INDEX idx_room_id_messages ON Messages (RoomID);
 CREATE INDEX idx_user_id_users_to_channels ON ChannelsToUsers (user_id);
 CREATE INDEX idx_room_id_rooms_to_channels ON RoomsToChannels (room_id);
 CREATE INDEX idx_channel_id_rooms_to_channels ON RoomsToChannels (channel_id);
+
+CREATE INDEX idx_channel ON Invites(ChannelID);
+CREATE INDEX idx_inviter ON Invites(InviterID);
+CREATE INDEX idx_invitee ON Invites(InviteeID);
+CREATE INDEX idx_expiration ON Invites(Expiration);
