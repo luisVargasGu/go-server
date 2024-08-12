@@ -42,8 +42,8 @@ CREATE TABLE Invites (
 	ID SERIAL PRIMARY KEY,
 	ChannelID INT NOT NULL,
 	InviterID INT NOT NULL,
-	InviteeID INT NOT NULL,
-	Status VARCHAR(20) NOT NULL CHECK (Status IN ('pending', 'accepted', 'expired')),
+	InviteeID INT NOT NULL DEFAULT -1,
+	InviteCode VARCHAR(255),
 	Expiration TIMESTAMP NOT NULL,
 	CreatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT fk_channel
