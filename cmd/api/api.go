@@ -10,7 +10,6 @@ import (
 	"user/server/services/message"
 	"user/server/services/room"
 	"user/server/services/user"
-
 	"github.com/gorilla/mux"
 )
 
@@ -29,6 +28,8 @@ func NewAPIServer(addr string, db *sql.DB) *APIServer {
 func (s *APIServer) Run() error {
 	router := mux.NewRouter()
 	subrouter := router.PathPrefix("/api/v1").Subrouter()
+	certPath := "/etc/letsencrypt/live/backendserver.me/fullchain.pem"
+	keyPath := "/etc/letsencrypt/live/backendserver.me/privkey.pem"
 
 	userStore := user.NewStore(s.db)
 	userHandler := user.NewHandler(userStore)
@@ -55,5 +56,5 @@ func (s *APIServer) Run() error {
 	hubHandler.HubInitialize()
 
 	log.Println("Starting server on", s.addr)
-	return http.ListenAndServe(s.addr, router)
+	return http.ListenAndServeTLS(s.addr, certPath, keyPath, router)
 }

@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 	"user/server/services/auth"
 	"user/server/services/image"
@@ -69,6 +68,7 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AuthHandler(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 
+	log.Println("CORS request from origin:", origin)
 	creds, err := decodeAuthRequestBody(r)
 	if err != nil {
 		handleError(w, "Invalid request body", http.StatusBadRequest, err)
@@ -139,18 +139,13 @@ func generateJWTToken(userID int) (string, error) {
 }
 
 func setJWTCookie(w http.ResponseWriter, origin, token string) {
-	parts := strings.Split(origin, "://")
-	domain := "localhost"
-	if len(parts) > 1 {
-		domainParts := strings.Split(parts[1], ":")
-		domain = domainParts[0]
-	}
-
 	http.SetCookie(w, &http.Cookie{
 		Name:    "jwt_token",
 		Value:   token,
 		Expires: time.Now().Add(24 * time.Hour),
-		Domain:  domain,
+		SameSite: http.SameSiteNoneMode,
+		Domain: "localhost",
+		Secure:   true,
 		Path:    "/",
 	})
 }
