@@ -13,7 +13,7 @@ type Invite struct {
 
 type InviteStore interface {
 	SaveInvite(inv Invite) error
-	AcceptInvite(inviteCode string, userID int) error
+	AcceptInvite(inviteCode string, userID int) (Invite, error)
 }
 
 type InviteRespose struct {
