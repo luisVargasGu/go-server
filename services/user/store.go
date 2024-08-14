@@ -66,7 +66,7 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 }
 
 func (s *Store) GetUserByID(userID int) (*types.User, error) {
-	rows, err := s.db.Query("SELECT * FROM Users WHERE ID = $1", userID)
+	rows, err := s.db.Query("SELECT ID, Username, Password, CreatedAt, Avatar FROM Users WHERE ID = $1", userID)
 	defer rows.Close()
 	if err != nil {
 		log.Println("Error querying database: ", err)
