@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"strconv"
 	"time"
 	"user/server/services/auth"
@@ -139,13 +140,19 @@ func generateJWTToken(userID int) (string, error) {
 }
 
 func setJWTCookie(w http.ResponseWriter, origin, token string) {
+	parts := strings.Split(origin, "://")
+	domain := "localhost"
+	if len(parts) > 1 {
+		domainParts := strings.Split(parts[1], ":")
+		domain = domainParts[0]
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:    "jwt_token",
 		Value:   token,
 		Expires: time.Now().Add(24 * time.Hour),
-		SameSite: http.SameSiteNoneMode,
-		Domain: "localhost",
-		Secure:   true,
+		Domain:  domain,
+		Secure: true,
 		Path:    "/",
 	})
 }
