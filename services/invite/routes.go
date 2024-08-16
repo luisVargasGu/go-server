@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"fmt"
 	"user/server/services/auth"
 	"user/server/services/utils"
 	"user/server/types"
@@ -13,14 +14,19 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var BASE_URL string = "https://backendserver.me/api/v1"
+
 type Handler struct {
 	store           types.InviteStore
 	userStore       types.UserStore
 	permissionStore types.PermissionsStore
 }
 
-func NewHandler(store types.InviteStore, userStore types.UserStore) *Handler {
-	return &Handler{store: store, userStore: userStore}
+func NewHandler(
+	store types.InviteStore,
+	userStore types.UserStore,
+	permissionStore types.PermissionsStore) *Handler {
+	return &Handler{store: store, userStore: userStore, permissionStore: permissionStore}
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
@@ -63,15 +69,14 @@ func (h *Handler) CreateInviteHandler(w http.ResponseWriter, r *http.Request) {
 		Expiration: time.Now().Add(1 * time.Hour),
 	}
 
-	err = h.store.SaveInvite(invite)
+	err = h.store.SaveInvite(&invite)
 	if err != nil {
 		http.Error(w, "Failed to save Invite.", http.StatusInternalServerError)
 		log.Println("Failed to save Invite.", err)
 		return
 	}
 
-	// TODO: use a global constant for baseUR:
-	inviteLink := "http://35.183.253.88:8080/invite/" + inviteCode
+	inviteLink := BASE_URL + "/invite/" + inviteCode
 	response := types.InviteRespose{Link: inviteLink}
 	utils.SendJSONResponse(w, http.StatusOK, response)
 }
@@ -87,15 +92,44 @@ func (h *Handler) AcceptInviteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := h.store.AcceptInvite(inviteLink, user.ID)
+	invite, err := h.store.FindInvite(inviteLink)
 	if err != nil {
-		http.Error(w, "Failed to find Invite.", http.StatusInternalServerError)
+		http.Error(w, "Failed to find Invite.", http.StatusNotFound)
 		log.Println("Failed to find Invite.", err)
 		return
 	}
 
 	if h.permissionStore.UserHasPermission(user.ID, invite.ChanelID) {
-		http.Error(w, "User already in Channel.", http.StatusBadRequest)
+		http.Error(w, "User already in Channel.", http.StatusConflict)
 		log.Println("User already in Channel.")
+		return
 	}
+
+	if !isInviteValid(invite) {
+		http.Error(w, "Invite is Invalid.", http.StatusGone)
+		log.Println("Invite is Invalid.")
+		return
+	}
+
+	err = h.store.AcceptInvite(invite.ID, user.ID)
+	if err != nil {
+		http.Error(w, "Failed to accept invite.", http.StatusInternalServerError)
+		log.Println("Failed to accept invite.", err)
+		return
+	}
+
+	response := types.InviteAcceptedResponse{Status: "success", Message: "Invite accepted successfully", Inv: *invite}
+	utils.SendJSONResponse(w, http.StatusOK, response)
+}
+
+func isInviteValid(invite *types.Invite) bool {
+	if invite.InviteeID != -1 {
+		return false
+	}
+
+	if time.Now().After(invite.Expiration) {
+		return false
+	}
+
+	return true
 }
