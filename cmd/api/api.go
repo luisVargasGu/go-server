@@ -62,6 +62,7 @@ func (s *APIServer) Run() error {
 	hubHandler := hub.NewHandler(hubStore, channelStore, roomStore, userStore)
 	hubHandler.HubInitialize()
 
+	// TODO: Enhance logging with some more robust middleware
 	log.Println("Starting server on", s.addr)
 	return http.ListenAndServe(s.addr, router)
 }
