@@ -42,7 +42,7 @@ func (s *Store) CreateUser(user types.User) (int, error) {
 
 // TODO: don't fetch password
 func (s *Store) GetUserByEmail(username string) (*types.User, error) {
-	rows, err := s.db.Query("SELECT * FROM Users WHERE Username = $1", username)
+	rows, err := s.db.Query("SELECT ID, Username, Password, CreatedAt, Avatar FROM Users WHERE Username = $1", username)
 	defer rows.Close()
 	if err != nil {
 		log.Println("Error querying database: ", err)
@@ -66,7 +66,7 @@ func (s *Store) GetUserByEmail(username string) (*types.User, error) {
 }
 
 func (s *Store) GetUserByID(userID int) (*types.User, error) {
-	rows, err := s.db.Query("SELECT * FROM Users WHERE ID = $1", userID)
+	rows, err := s.db.Query("SELECT ID, Username, Password, CreatedAt, Avatar FROM Users WHERE ID = $1", userID)
 	defer rows.Close()
 	if err != nil {
 		log.Println("Error querying database: ", err)
