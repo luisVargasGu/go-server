@@ -1,0 +1,7 @@
+resources:
+  - ../../base/db-deployment.yml
+  - ../../base/go-deployment.yml
+  - ../../base/react-deployment.yml
+  - ../../base/nginx-deployment.yml
+  - ../../base/issuer-deployment.yml
+  - ../../base/ingress.yml
