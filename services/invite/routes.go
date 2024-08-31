@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	"fmt"
 	"user/server/services/auth"
 	"user/server/services/utils"
 	"user/server/types"
