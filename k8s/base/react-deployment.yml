@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: react-app
-          image: 438465166613.dkr.ecr.ca-central-1.amazonaws.com/luis-portfolio/react-portfolio:latest
+          image: 438465166613.dkr.ecr.ca-central-1.amazonaws.com/luis-portfolio:react-portfolio
           ports:
             - containerPort: 80
 

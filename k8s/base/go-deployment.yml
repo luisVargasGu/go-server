@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: my-go-app
-          image: 438465166613.dkr.ecr.ca-central-1.amazonaws.com/luis-portfolio/my-go-app:latest
+          image: 438465166613.dkr.ecr.ca-central-1.amazonaws.com/luis-portfolio:go-app
           ports:
             - containerPort: 8080
           env:
