@@ -19,7 +19,7 @@ spec:
             - containerPort: 8080
           env:
             - name: DB_HOST
-              value: "postgres-service"
+              value: "35.183.253.88"
             - name: DB_PORT
               value: "5432"
             - name: DB_USER

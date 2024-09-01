@@ -19,9 +19,25 @@ spec:
             - containerPort: 80
           volumeMounts:
             - name: nginx-config
-              mountPath: /etc/nginx/conf.d
+              mountPath: /etc/nginx/conf.d/nginx-router.conf
               subPath: nginx-router.conf
       volumes:
         - name: nginx-config
           configMap:
             name: nginx-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
