@@ -6,7 +6,7 @@ type Invite struct {
 	ID         int       `json:"id"`
 	ChanelID   int       `json:"channel_id"`
 	InviterID  int       `json:"inviter_id"`
-	InviteeID  int       `json:"invitee_id"`
+	InviteeID  *int       `json:"invitee_id"`
 	InviteCode string    `json:"invite_code"`
 	CreatedAt  time.Time `json:"created_at"`
 	Expiration time.Time `json:"expiration"`

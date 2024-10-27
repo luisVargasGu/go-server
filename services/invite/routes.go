@@ -75,8 +75,7 @@ func (h *Handler) CreateInviteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inviteLink := BASE_URL + "/invite/" + inviteCode
-	response := types.InviteRespose{Link: inviteLink}
+	response := types.InviteRespose{Link: inviteCode}
 	utils.SendJSONResponse(w, http.StatusOK, response)
 }
 
@@ -122,11 +121,12 @@ func (h *Handler) AcceptInviteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func isInviteValid(invite *types.Invite) bool {
-	if invite.InviteeID != -1 {
+	now := time.Now()
+	if invite.InviteeID != nil {
 		return false
 	}
 
-	if time.Now().After(invite.Expiration) {
+	if !now.After(invite.Expiration) {
 		return false
 	}
 
