@@ -89,9 +89,9 @@ func (s *Store) GetMessagesInRoom(roomID int) ([]*types.Message, error) {
 	return messages, nil
 }
 
-func (s *Store) CreateMessage(m types.Message) error {
-	_, err := s.db.Exec("INSERT INTO Messages (RoomID, SenderID, Content, IsRead) VALUES ($1, $2, $3, $4)",
-		m.RoomID, m.SenderID, m.Content, false)
+func (s *Store) CreateMessage(m *types.Message) error {
+	err := s.db.QueryRow("INSERT INTO Messages (RoomID, SenderID, Content, IsRead) VALUES ($1, $2, $3, $4) RETURNING ID",
+		m.RoomID, m.SenderID, m.Content, false).Scan(&m.ID)
 	if err != nil {
 		log.Println("Error creating message: ", err)
 		return err
