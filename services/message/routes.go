@@ -1,7 +1,7 @@
 package message
 
 import (
-	"fmt"
+	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strconv"
@@ -9,8 +9,6 @@ import (
 	"user/server/services/hub"
 	"user/server/services/utils"
 	"user/server/types"
-
-	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -76,8 +74,17 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.GetUserFromContext(r.Context())
 
-	client := hub.NewClient(ws, fmt.Sprint(user.ID), fmt.Sprint(user.Username))
-	room.Register <- client
+	client := hub.NewClient(ws, user)
+	if room.Bus == nil {
+		http.Error(w, "Could not connect to the room", http.StatusBadRequest)
+		log.Println("Could not connect to the room: ", err)
+		return
+	}
+
+	room.Bus.Publish(types.Event{
+		Type:    types.EventRegister,
+		Payload: client,
+	})
 
 	go client.ReadMessages(room, h.store)
 
