@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"time"
 )
 
