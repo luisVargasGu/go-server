@@ -12,6 +12,8 @@ type Message struct {
 	ID              int                        `json:"id,omitempty"`
 	Type            string                     `json:"type"`
 	TrackID         string                     `json:"track_id,omitempty"`
+	TrackType       string                     `json:"track_type,omitempty"`
+	StreamID        string                     `json:"stream_id,omitempty"`
 	RoomID          int                        `json:"room_id"`
 	SenderID        int                        `json:"sender_id"`
 	SenderName      string                     `json:"sender_name,omitempty"`
