@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"time"
 	"user/server/services/utils"
 
 	"github.com/pion/rtcp"
@@ -23,6 +24,13 @@ var iceServers = []webrtc.ICEServer{
 var config = webrtc.Configuration{
 
 	ICEServers: iceServers,
+}
+
+var trackLocals = LocalTracks{}
+
+type LocalTracks struct {
+	mu     sync.RWMutex
+	tracks map[string]*webrtc.TrackLocalStaticRTP
 }
 
 type Room struct {
@@ -66,6 +74,12 @@ func (r *Room) Run() {
 	r.Bus.Subscribe(EventBroadcast, broadcastCh)
 	r.Bus.Subscribe(EventUnregister, unRegisterCh)
 
+	go func() {
+		for range time.NewTicker(time.Second * 3).C {
+			dispatchKeyFrame(r)
+		}
+	}()
+
 	for {
 		select {
 		case event := <-registerCh:
@@ -80,19 +94,18 @@ func (r *Room) Run() {
 
 func (r *Room) handleRegister(client *Client) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	log.Printf("Registering client:  %v with pointer: %v", client.ID, &client)
 	r.Clients[client] = &ClientInfo{
 		Connected:   true,
 		MediaTracks: make(map[string]*TrackInfo),
 	}
+	r.mu.Unlock()
 	r.handleCreateOffer(client)
-	dispatchKeyFrame(r)
-	handleChatMessageNoLock(r, utils.Marshal(r.ToResponse()))
 }
 
 func dispatchKeyFrame(r *Room) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	for client := range r.Clients {
 		for _, receiver := range client.PeerConnection.GetReceivers() {
 			if receiver.Track() == nil {
@@ -126,8 +139,6 @@ func (r *Room) handleUnregister(client *Client) {
 func (r *Room) ToResponse() RoomInfoMessage {
 	users := make([]UserInfo, 0, len(r.Clients))
 	for client, info := range r.Clients {
-		client.mu.RLock()
-
 		var avatar string
 		if len(client.Avatar) > 0 {
 			avatar = base64.StdEncoding.EncodeToString(client.Avatar)
@@ -147,8 +158,6 @@ func (r *Room) ToResponse() RoomInfoMessage {
 			IsScreenEnabled: client.ScreenEnabled,
 			Tracks:          tracks,
 		})
-
-		client.mu.RUnlock()
 	}
 
 	return RoomInfoMessage{
@@ -170,14 +179,15 @@ func (r *Room) handleBroadcast(payload []byte) {
 
 	switch msg.Type {
 	// TODO: handle tracks separately as we'll have to update client state on the hub
+	// TODO: this is only used for toggleMicSharing
 	case "webrtc-tracks":
 		handleUserStateUpdate(r, msg)
+	case "track-metadata":
+		handleTrackMetadata(r, msg)
 	case "chat-message":
 		handleChatMessage(r, payload)
 	case "webrtc-answer", "webrtc-ice-candidate", "webrtc-offer":
 		handleWebRTCEvent(r, msg)
-	case "stop-share":
-		handleStopShare(r, msg)
 	default:
 		log.Printf("Unhandled message type: %s", msg.Type)
 	}
@@ -209,7 +219,7 @@ func (r *Room) handleCreateOffer(client *Client) {
 			return
 		}
 
-		_, err = pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{
+		_, err = pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
 			Direction: webrtc.RTPTransceiverDirectionRecvonly,
 		})
 		if err != nil {
@@ -217,15 +227,13 @@ func (r *Room) handleCreateOffer(client *Client) {
 			return
 		}
 
-		// Accept one audio and one video track incoming
-		// for _, typ := range []webrtc.RTPCodecType{webrtc.RTPCodecTypeVideo, webrtc.RTPCodecTypeAudio} {
-		// 	if _, err := pc.AddTransceiverFromKind(typ, webrtc.RTPTransceiverInit{
-		// 		Direction: webrtc.RTPTransceiverDirectionRecvonly,
-		// 	}); err != nil {
-		// 		log.Printf("Failed to add transceiver: %v", err)
-		// 		return
-		// 	}
-		// }
+		_, err = pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{
+			Direction: webrtc.RTPTransceiverDirectionRecvonly,
+		})
+		if err != nil {
+			log.Printf("Failed to add transceiver: %v", err)
+			return
+		}
 
 		client.PeerConnection = pc
 		pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
@@ -241,70 +249,187 @@ func (r *Room) handleCreateOffer(client *Client) {
 			}
 		})
 
+		pc.OnConnectionStateChange(func(p webrtc.PeerConnectionState) {
+
+			switch p {
+			case webrtc.PeerConnectionStateFailed:
+				if err := pc.Close(); err != nil {
+					log.Printf("Failed to close PeerConnection: %v", err)
+				}
+			case webrtc.PeerConnectionStateClosed:
+				r.signalPeerConnections()
+			default:
+			}
+		})
+
 		pc.OnTrack(func(track *webrtc.TrackRemote, reciever *webrtc.RTPReceiver) {
 			log.Printf("Received track of kind %s from client %d with id %s", track.Kind().String(), clientID, track.ID())
 
-			localTrack, err := webrtc.NewTrackLocalStaticRTP(
-				track.Codec().RTPCodecCapability,
-				track.ID(),
-				track.StreamID(),
-			)
-			if err != nil {
-				log.Printf("Failed to create local track: %v", err)
+			r.mu.Lock()
+			clientInfo, exists := r.Clients[client]
+			if !exists {
+				log.Printf("Client info not found for client %d", clientID)
+				r.mu.Unlock()
 				return
 			}
 
-			r.mu.Lock()
-			clientInfo, exists := r.Clients[client]
-			if exists {
-				clientInfo.MediaTracks[track.ID()] = &TrackInfo{
-					Track: localTrack,
-					ID:    track.ID(),
-					Kind:  track.Kind().String(),
-				}
-				r.Clients[client] = clientInfo
+			// Look up the existing TrackInfo by track ID
+			trackInfo, trackExists := clientInfo.MediaTracks[track.StreamID()]
+			if !trackExists {
+				log.Printf("TrackInfo not found for track ID %s; and stream ID %s.", track.ID(), track.StreamID())
+				r.mu.Unlock()
+				return
 			}
 			r.mu.Unlock()
 
-			r.forwardTrackToOthers(client, localTrack, track)
+			trackLocal := addTrack(r, track)
+			trackInfo.Track = trackLocal
+			defer removeTrack(r, client, trackLocal)
+
+			buf := make([]byte, 1500)
+			rtpPkt := &rtp.Packet{}
+
+			for {
+				i, _, err := track.Read(buf)
+				if err != nil {
+					return
+				}
+
+				if err = rtpPkt.Unmarshal(buf[:i]); err != nil {
+					log.Printf("Failed to unmarshal incoming RTP packet: %v", err)
+					return
+				}
+
+				rtpPkt.Extension = false
+				rtpPkt.Extensions = nil
+
+				if err = trackLocal.WriteRTP(rtpPkt); err != nil {
+					return
+				}
+			}
 		})
 
 	}
 
-	for otherClient, clientInfo := range r.Clients {
-		if otherClient == client {
-			continue
-		}
-		for _, trackInfo := range clientInfo.MediaTracks {
-			_, err := pc.AddTrack(trackInfo.Track)
-			if err != nil {
-				log.Printf("Failed to add track for client %s: %v", otherClient.ID, err)
+	r.signalPeerConnections()
+}
+
+func (r *Room) signalPeerConnections() {
+	r.mu.Lock()
+	trackLocals.mu.Lock()
+	defer func() {
+		r.mu.Unlock()
+		trackLocals.mu.Unlock()
+		dispatchKeyFrame(r)
+	}()
+
+	attemptSync := func() (tryAgain bool) {
+		for client, clientInfo := range r.Clients {
+			log.Println("Creating Offer to: ", client.ID)
+			if client.PeerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+				client.mu.Lock()
+				clientInfo.Connected = false
+				clientInfo.MediaTracks = make(map[string]*TrackInfo)
+				client.PeerConnection = nil
+				client.mu.Unlock()
+				return true
 			}
+
+			// Map to track which senders or receivers are already accounted for
+			existingSenders := map[string]bool{}
+			existingStreamIDs := map[string]bool{}
+
+			// Handle existing senders
+			for _, sender := range client.PeerConnection.GetSenders() {
+				if sender.Track() == nil {
+					continue
+				}
+
+				streamID := sender.Track().StreamID()
+				existingSenders[sender.Track().ID()] = true
+				existingStreamIDs[streamID] = true
+
+				// Check existence in trackLocals using StreamID as the key
+				trackLocal, ok := trackLocals.tracks[streamID]
+				if !ok {
+					log.Println("Removing outdated track:", sender.Track().ID(), "StreamID:", streamID)
+					if err := client.PeerConnection.RemoveTrack(sender); err != nil {
+						log.Println("Error removing track:", err)
+						return true
+					}
+					continue
+				}
+
+				// Ensure the StreamID matches
+				if trackLocal.StreamID() != streamID {
+					log.Println("Removing mismatched track:", sender.Track().ID(), "StreamID:", streamID)
+					if err := client.PeerConnection.RemoveTrack(sender); err != nil {
+						log.Println("Error removing track:", err)
+						return true
+					}
+				}
+			}
+
+			// Handle existing receivers to avoid loopback
+			for _, receiver := range client.PeerConnection.GetReceivers() {
+				if receiver.Track() == nil {
+					continue
+				}
+				streamID := receiver.Track().StreamID()
+				existingStreamIDs[streamID] = true
+			}
+
+			// Add missing tracks by checking StreamID and TrackID
+			for _, trackInfo := range trackLocals.tracks {
+				if _, ok := existingStreamIDs[trackInfo.StreamID()]; !ok {
+					log.Println("Adding new track with StreamID:", trackInfo.StreamID())
+					if _, err := client.PeerConnection.AddTrack(trackInfo); err != nil {
+						log.Println("Error adding track:", err)
+						return true
+					}
+				}
+			}
+
+			offer, err := client.PeerConnection.CreateOffer(nil)
+			if err != nil {
+				return true
+			}
+
+			if err = client.PeerConnection.SetLocalDescription(offer); err != nil {
+				return true
+			}
+
+			clientID, err := strconv.Atoi(client.ID)
+			if err != nil {
+				return true
+			}
+			offerMessage := Message{
+				Type:     "webrtc-offer",
+				SenderID: clientID,
+				Offer:    &offer,
+			}
+			client.Send <- utils.Marshal(r.ToResponse())
+
+			sendToClient(r, client, utils.Marshal(offerMessage))
+		}
+
+		return
+	}
+
+	for syncAttempt := 0; ; syncAttempt++ {
+		if syncAttempt == 25 {
+			// Release the lock and attempt a sync in 3 seconds. We might be blocking a RemoveTrack or AddTrack
+			go func() {
+				time.Sleep(time.Second * 3)
+				r.signalPeerConnections()
+			}()
+			return
+		}
+
+		if !attemptSync() {
+			break
 		}
 	}
-
-	offer, err := pc.CreateOffer(nil)
-	if err != nil {
-		log.Printf("Failed to create offer: %v", err)
-		return
-	}
-
-	// modifiedSDP := strings.ReplaceAll(offer.SDP, "a=setup:actpass", "a=setup:passive")
-	// offer.SDP = modifiedSDP
-
-	if err = pc.SetLocalDescription(offer); err != nil {
-		log.Printf("Failed to set local description: %v", err)
-		return
-	}
-
-	offerMessage := Message{
-		Type:     "webrtc-offer",
-		SenderID: clientID,
-		Offer:    &offer,
-	}
-
-	log.Println("Sending initial Offer to: ", clientID)
-	sendToClient(r, client, utils.Marshal(offerMessage))
 }
 
 func (r *Room) handleWebRTCOffer(msg Message) {
@@ -325,31 +450,30 @@ func (r *Room) handleWebRTCOffer(msg Message) {
 		return
 	}
 
-	r.mu.Lock()
-	clientInfo, exists := r.Clients[sender]
-	if exists {
-		// Create a map to keep track of the current active tracks
-		activeTracks := make(map[string]bool)
-		for _, transceiver := range pc.GetTransceivers() {
-			if transceiver.Receiver() != nil {
-				track := transceiver.Receiver().Track()
-				if track != nil {
-					activeTracks[track.ID()] = true
-				}
+	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate != nil {
+			iceCandidate := candidate.ToJSON()
+			iceCandidateMessage := Message{
+				Type:      "webrtc-ice-candidate",
+				SenderID:  senderID,
+				Candidate: &iceCandidate,
 			}
-		}
 
-		// Check which tracks are no longer active and remove them
-		for trackID := range clientInfo.MediaTracks {
-			if !activeTracks[trackID] {
-				log.Printf("Track %s removed for client %d", trackID, senderID)
-				delete(clientInfo.MediaTracks, trackID)
+			sendToClient(r, sender, utils.Marshal(iceCandidateMessage))
+		}
+	})
+
+	pc.OnConnectionStateChange(func(p webrtc.PeerConnectionState) {
+		switch p {
+		case webrtc.PeerConnectionStateFailed:
+			if err := pc.Close(); err != nil {
+				log.Printf("Failed to close PeerConnection: %v", err)
 			}
+		case webrtc.PeerConnectionStateClosed:
+			r.signalPeerConnections()
+		default:
 		}
-
-		r.Clients[sender] = clientInfo
-	}
-	r.mu.Unlock()
+	})
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, reciever *webrtc.RTPReceiver) {
 		var kind string
@@ -370,32 +494,51 @@ func (r *Room) handleWebRTCOffer(msg Message) {
 		}
 		log.Printf("Received track of kind %s from client %d with id %s", kind, senderID, track.ID())
 
-		localTrack, err := webrtc.NewTrackLocalStaticRTP(
-			track.Codec().RTPCodecCapability,
-			track.ID(),
-			track.StreamID(),
-		)
-		if err != nil {
-			log.Printf("Failed to create local track: %v", err)
+		r.mu.Lock()
+		clientInfo, exists := r.Clients[sender]
+		if !exists {
+			log.Printf("Client info not found for client %d", senderID)
+			r.mu.Unlock()
 			return
 		}
 
-		r.mu.Lock()
-		clientInfo, exists := r.Clients[sender]
-		if exists {
-			clientInfo.MediaTracks[track.ID()] = &TrackInfo{
-				Track: localTrack,
-				ID:    track.ID(),
-				Kind:  kind,
-			}
-			r.Clients[sender] = clientInfo
+		// Look up the existing TrackInfo by track ID
+		trackInfo, trackExists := clientInfo.MediaTracks[track.StreamID()]
+		if !trackExists {
+			log.Printf("TrackInfo not found for track ID %s; and stream ID %s.", track.ID(), track.StreamID())
+			r.mu.Unlock()
+			return
 		}
 		r.mu.Unlock()
 
-		r.forwardTrackToOthers(sender, localTrack, track)
+		trackLocal := addTrack(r, track)
+		trackInfo.Track = trackLocal
+		defer removeTrack(r, sender, trackLocal)
+
+		buf := make([]byte, 1500)
+		rtpPkt := &rtp.Packet{}
+
+		for {
+			i, _, err := track.Read(buf)
+			if err != nil {
+				return
+			}
+
+			if err = rtpPkt.Unmarshal(buf[:i]); err != nil {
+				log.Printf("Failed to unmarshal incoming RTP packet: %v", err)
+				return
+			}
+
+			rtpPkt.Extension = false
+			rtpPkt.Extensions = nil
+
+			if err = trackLocal.WriteRTP(rtpPkt); err != nil {
+				return
+			}
+		}
+
 	})
 
-	log.Printf("Peer Connection offer State: ", pc.SignalingState())
 	if err := pc.SetRemoteDescription(*msg.Offer); err != nil {
 		log.Printf("Failed to set remote description: %v", err)
 		return
@@ -407,9 +550,6 @@ func (r *Room) handleWebRTCOffer(msg Message) {
 		return
 	}
 
-	// modifiedSDP := strings.ReplaceAll(answer.SDP, "a=setup:active", "a=setup:actpass")
-	// answer.SDP = modifiedSDP
-
 	if err = pc.SetLocalDescription(answer); err != nil {
 		log.Printf("Failed to set local description: %v", err)
 		return
@@ -420,7 +560,7 @@ func (r *Room) handleWebRTCOffer(msg Message) {
 		SenderID: senderID,
 		Answer:   &answer,
 	}
-	log.Printf("Handled offer, sending answer", pc.SignalingState())
+	log.Println("Handled offer, sent answer to ", senderID)
 	sendToClient(r, sender, utils.Marshal(answerMessage))
 }
 
@@ -448,32 +588,48 @@ func (r *Room) handleWebRTCAnswer(msg Message) {
 	}
 
 	log.Printf("Successfully set answer remote description for client %d", senderID)
-	log.Printf("Peer Connection State: ", pc.SignalingState())
 }
 
-func (r *Room) forwardTrackToOthers(sender *Client, localTrack *webrtc.TrackLocalStaticRTP, remoteTrack *webrtc.TrackRemote) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func addTrack(r *Room, t *webrtc.TrackRemote) *webrtc.TrackLocalStaticRTP {
+	trackLocals.mu.Lock()
+	defer func() {
+		trackLocals.mu.Unlock()
+		r.signalPeerConnections()
+	}()
 
-	for client := range r.Clients {
-		if client == sender {
-			continue
+	trackLocal, err := webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
+	if err != nil {
+		panic(err)
+	}
+
+	if trackLocals.tracks == nil {
+		trackLocals.tracks = make(map[string]*webrtc.TrackLocalStaticRTP)
+	}
+	trackLocals.tracks[t.StreamID()] = trackLocal
+	return trackLocal
+}
+
+func removeTrack(r *Room, client *Client, t *webrtc.TrackLocalStaticRTP) {
+	r.mu.Lock()
+	trackLocals.mu.Lock()
+	info := r.Clients[client]
+	defer func() {
+		r.mu.Unlock()
+		trackLocals.mu.Unlock()
+		r.signalPeerConnections()
+	}()
+
+	if info != nil {
+		_, exists := info.MediaTracks[t.StreamID()]
+		if exists {
+			delete(info.MediaTracks, t.StreamID())
 		}
+	}
 
-		forwardPC := client.PeerConnection
-		if forwardPC == nil {
-			continue
-		}
-
-		log.Println("Forwarding track to: ", client.ID)
-		_, err := forwardPC.AddTrack(localTrack)
-		if err != nil {
-			log.Printf("Failed to add track to PeerConnection for client %s: %v", client.ID, err)
-		}
-
-		handleRenegotiation(r, client)
-		client.Send <- utils.Marshal(r.ToResponse())
-		go handleTrackForwarding(remoteTrack, localTrack)
+	_, exists := trackLocals.tracks[t.StreamID()]
+	if exists {
+		log.Println("Removing track")
+		delete(trackLocals.tracks, t.StreamID())
 	}
 }
 
@@ -501,8 +657,67 @@ func (r *Room) handleWebRTCIceCandidate(msg Message) {
 		log.Printf("Error adding ICE candidate: %v", err)
 	}
 	sender.mu.Unlock()
-	log.Println("Added Ice candidate for client", senderID)
-	log.Println("Peer Connection State: ", sender.PeerConnection.ConnectionState())
+}
+
+func handleTrackMetadata(r *Room, msg Message) {
+	log.Println("Handling track metadata:", msg)
+
+	// Find the client by sender ID
+	client := r.GetClientByID(strconv.Itoa(msg.SenderID))
+	if client == nil {
+		log.Printf("Client not found for sender ID: %d", msg.SenderID)
+		return
+	}
+
+	// Acquire lock to modify room state
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Ensure the client exists in the room's state
+	info, exists := r.Clients[client]
+	if !exists {
+		log.Printf("Client state not found for client ID: %v", client.ID)
+		return
+	}
+
+	// Validate message fields
+	if msg.TrackType == "" || msg.TrackID == "" || msg.StreamID == "" {
+		log.Println("Invalid track metadata received; missing required fields")
+		return
+	}
+
+	// Check if the client's MediaTracks map is initialized
+	if info.MediaTracks == nil {
+		info.MediaTracks = make(map[string]*TrackInfo)
+	}
+
+	// Remove any existing track with the same Kind
+	for trackID, trackInfo := range info.MediaTracks {
+		if trackInfo.Kind == msg.TrackType {
+			// Delete the existing track
+			delete(info.MediaTracks, trackID)
+			log.Printf("Deleted old track with ID %s of kind %s for client %s", trackID, msg.TrackType, client.ID)
+			break
+		}
+	}
+
+	// Add the new track
+	newTrack := &TrackInfo{
+		Kind:     msg.TrackType,
+		ID:       msg.TrackID,
+		StreamID: msg.StreamID,
+	}
+	info.MediaTracks[msg.StreamID] = newTrack
+	log.Printf("New track added for client %s: %+v", client.ID, *newTrack)
+
+	// Notify all clients except the sender about the updated room state
+	roomState := r.ToResponse()
+	for otherClient := range r.Clients {
+		if otherClient.ID == strconv.Itoa(msg.SenderID) {
+			continue
+		}
+		otherClient.Send <- utils.Marshal(roomState)
+	}
 }
 
 func handleUserStateUpdate(r *Room, msg Message) {
@@ -606,98 +821,6 @@ func handleWebRTCEvent(r *Room, message Message) {
 	default:
 		log.Printf("Unkown message type: %s", message.Type)
 	}
-}
-
-func handleRenegotiation(r *Room, client *Client) {
-	clientID, err := strconv.Atoi(client.ID)
-	if err != nil {
-		log.Printf("Error parsing client id: %v", err)
-		return
-	}
-
-	pc := client.PeerConnection
-	if pc == nil {
-		log.Printf("PeerConnection does not exist for client %d. Cannot renegotiate.", clientID)
-		return
-	}
-
-	offer, err := pc.CreateOffer(nil)
-	if err != nil {
-		log.Printf("Failed to create offer: %v", err)
-		return
-	}
-
-	if err = pc.SetLocalDescription(offer); err != nil {
-		log.Printf("Failed to set local description: %v", err)
-		return
-	}
-
-	offerMessage := Message{
-		Type:     "webrtc-renegotiation",
-		SenderID: clientID,
-		Offer:    &offer,
-	}
-	sendToClient(r, client, utils.Marshal(offerMessage))
-}
-
-func handleTrackForwarding(rt *webrtc.TrackRemote, lt *webrtc.TrackLocalStaticRTP) {
-	buf := make([]byte, 1500)
-	rtpPkt := &rtp.Packet{}
-
-	for {
-		n, _, readErr := rt.Read(buf)
-		if readErr != nil {
-			log.Printf("Error reading RTP packets from track: %v", readErr)
-			return
-		}
-
-		if unMarshalErr := rtpPkt.Unmarshal(buf[:n]); unMarshalErr != nil {
-			log.Printf("Failed to unmarshal incoming RTP packet: %v", unMarshalErr)
-			return
-		}
-
-		if writeErr := lt.WriteRTP(rtpPkt); writeErr != nil {
-			log.Printf("Error writting RTP packets to local track: %v", writeErr)
-			return
-		}
-	}
-}
-
-func handleStopShare(r *Room, msg Message) {
-	senderID := msg.SenderID
-	trackID := msg.TrackID
-
-	if trackID == "" {
-		log.Printf("TrackID missing in stop screen share request from sender %d", senderID)
-		return
-	}
-
-	sender := r.GetClientByID(strconv.Itoa(senderID))
-	if sender == nil {
-		log.Printf("Sender not found: sender=%d", senderID)
-		return
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	sender.mu.Lock()
-	defer sender.mu.Unlock()
-
-	clientInfo, exists := r.Clients[sender]
-	if !exists {
-		log.Printf("Client info not found for sender %d", senderID)
-		return
-	}
-
-	trackInfo, ok := clientInfo.MediaTracks[trackID]
-	if !ok || trackInfo == nil {
-		log.Printf("No screen-sharing track found for sender %d with track ID %s", senderID, trackID)
-		return
-	}
-
-	log.Printf("Stopping track for sender %d, track ID %s", senderID, trackID)
-	removeTrackNoLock(r, sender, trackID)
 }
 
 func sendToClient(r *Room, client *Client, message []byte) {
