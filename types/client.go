@@ -10,9 +10,10 @@ import (
 )
 
 type TrackInfo struct {
-	Track *webrtc.TrackLocalStaticRTP `json:"-"`
-	ID    string                      `json:"id"`
-	Kind  string                      `json:"type"`
+	Track    *webrtc.TrackLocalStaticRTP `json:"-"`
+	ID       string                      `json:"id"`
+	Kind     string                      `json:"type"`
+	StreamID string                      `json:"streamId"`
 }
 
 type ClientInfo struct {
