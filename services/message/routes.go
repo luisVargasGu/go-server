@@ -1,7 +1,6 @@
 package message
 
 import (
-	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -37,11 +36,18 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 
 func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+
 	channelID, err := strconv.Atoi(vars["channelID"])
+	if err != nil {
+		http.Error(w, "Invalid channel", http.StatusBadRequest)
+		log.Println("Invalid channel:", err)
+		return
+	}
+
 	roomID, err := strconv.Atoi(vars["roomID"])
 	if err != nil {
-		http.Error(w, "Invalid channel or room", http.StatusBadRequest)
-		log.Println("Invalid channel or room:", err)
+		http.Error(w, "Invalid room", http.StatusBadRequest)
+		log.Println("Invalid room:", err)
 		return
 	}
 
@@ -68,12 +74,21 @@ func (h *Handler) ChattingHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := auth.GetUserFromContext(r.Context())
 
-	client := hub.NewClient(ws, fmt.Sprint(user.ID), fmt.Sprint(user.Username))
-	room.Register <- client
+	client := hub.NewClient(ws, user)
+	if room.Bus == nil {
+		http.Error(w, "Could not connect to the room", http.StatusBadRequest)
+		log.Println("Could not connect to the room: ", err)
+		return
+	}
+
+	room.Bus.Publish(types.Event{
+		Type:    types.EventRegister,
+		Payload: client,
+	})
 
 	go client.ReadMessages(room, h.store)
 
-	client.WriteMessages()
+	go client.WriteMessages()
 }
 
 func (h *Handler) FetchMessages(w http.ResponseWriter, r *http.Request) {

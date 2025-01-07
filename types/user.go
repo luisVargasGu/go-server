@@ -12,6 +12,16 @@ type User struct {
 	Avatar    []byte    `json:"avatar"`
 }
 
+type UserInfo struct {
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	Avatar          string      `json:"avatar,omitempty"`
+	IsMicEnabled    bool        `json:"isMicEnabled"`
+	IsVideoEnabled  bool        `json:"isVideoEnabled"`
+	IsScreenEnabled bool        `json:"isScreenEnabled"`
+	Tracks          []TrackInfo `json:"tracks"`
+}
+
 type SeenByUser struct {
 	Avatar   string `json:"avatar"`
 	Username string `json:"username"`

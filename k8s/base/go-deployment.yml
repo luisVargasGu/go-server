@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-go-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-go-app
+  template:
+    metadata:
+      labels:
+        app: my-go-app
+    spec:
+      containers:
+        - name: my-go-app
+          image: 438465166613.dkr.ecr.ca-central-1.amazonaws.com/luis-portfolio:go-app
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "35.183.253.88"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "admin"
+            - name: DB_PASSWORD
+              value: "password"
+            - name: DB_NAME
+              value: "chat_app"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-go-app-service
+spec:
+  type: ClusterIP
+  selector:
+    app: my-go-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+

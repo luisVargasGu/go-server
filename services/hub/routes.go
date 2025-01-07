@@ -1,10 +1,12 @@
 package hub
 
 import (
-	"github.com/gorilla/websocket"
+	"fmt"
 	"log"
 	"sync"
 	"user/server/types"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
@@ -13,8 +15,16 @@ var (
 )
 
 // TODO: move to a client type definition file
-func NewClient(conn *websocket.Conn, id string, username string) *types.Client {
-	return &types.Client{Conn: conn, Send: make(chan []byte), ID: id, Username: username}
+func NewClient(conn *websocket.Conn, user *types.User) *types.Client {
+	return &types.Client{
+		WebsocketConnection: conn,
+		Send:                make(chan []byte, 20),
+		ID:                  fmt.Sprint(user.ID),
+		Username:            user.Username,
+		Avatar:              user.Avatar,
+		MicEnabled:          false,
+		VideoEnabled:        false,
+		ScreenEnabled:       false}
 }
 
 type Handler struct {
@@ -48,10 +58,8 @@ func (h *Handler) HubInitialize() *types.Hub {
 			}
 			channel.Rooms = make(map[int]*types.Room)
 			for _, room := range rooms {
-				room.Clients = make(map[*types.Client]bool)
-				room.Register = make(chan *types.Client)
-				room.Unregister = make(chan *types.Client)
-				room.Broadcast = make(chan []byte)
+				room.Clients = make(map[*types.Client]*types.ClientInfo)
+				room.Bus = types.NewEventBus()
 				channel.Rooms[room.ID] = room
 				go room.Run()
 			}

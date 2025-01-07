@@ -26,9 +26,9 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
     ```dotenv
     DB_HOST=localhost
     DB_PORT=5432
-    DB_USER=admin
+    DB_USER=user
     DB_PASSWORD=password
-    DB_NAME=chat_app
+    DB_NAME=db
     ```
 5. **Build and Run:** Navigate to the project directory and run the following commands:
     ```bash
@@ -44,6 +44,22 @@ This is a simple chat application written in Go(lang) with PostgreSQL as the dat
 3. **Install Dependencies:** Navigate to the project directory and run `npm i`.
 4. **Start the development server:** `npm run dev`
 5. **Access the App:** Once the server is running, access the application in your web browser at `http://localhost:3000`.
+
+## Docker
+
+You can also build the app in Docker:
+
+```bash
+docker build -t my-go-app .
+docker run -d \
+  -e DB_HOST="host" \
+  -e DB_PORT="5432" \
+  -e DB_USER="user" \
+  -e DB_PASSWORD="password" \
+  -e DB_NAME="db" \
+  -p 8080:8080 \
+  my-go-app:latest
+```
 
 ## User Flow
 

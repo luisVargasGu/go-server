@@ -22,18 +22,18 @@ func NewHandler(store types.RoomStore, userStore types.UserStore) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/channels/{channelID}/rooms", auth.WithJWTAuth(
+	r.HandleFunc("/Channel/{channelID}/rooms", auth.WithJWTAuth(
 		utils.CorsHandler(h.GetRoomsInChannel),
 		h.userStore),
 	).Methods("GET")
 
-	r.HandleFunc("/rooms",
+	r.HandleFunc("/Room",
 		utils.CorsHandler(
 			auth.WithJWTAuth(h.CreateRoom,
 				h.userStore),
 		)).Methods("POST", "OPTIONS")
 
-	r.HandleFunc("/rooms/{roomID}",
+	r.HandleFunc("/Room/{roomID}",
 		utils.CorsHandler(
 			auth.WithJWTAuth(h.DeleteRoom,
 				h.userStore),
@@ -44,8 +44,8 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	channelID, err := strconv.Atoi(vars["channelID"])
 	if err != nil {
-		log.Println("Invalid room ID")
-		http.Error(w, "Invalid room ID", http.StatusBadRequest)
+		log.Println("Invalid Channel ID")
+		http.Error(w, "Invalid Channel ID", http.StatusBadRequest)
 		return
 	}
 
@@ -56,22 +56,20 @@ func (h *Handler) GetRoomsInChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := types.RoomResponse{Rooms: rooms}
+	response := types.RoomsResponse{Rooms: rooms}
 	utils.SendJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
-	room := &types.Room{Clients: make(map[*types.Client]bool)}
-	room.Register = make(chan *types.Client)
-	room.Unregister = make(chan *types.Client)
-	room.Broadcast = make(chan []byte)
-
+	room := &types.Room{}
 	err := utils.ParseJSON(r, room)
 	if err != nil {
-		log.Println("Invalid JSON")
+		log.Println("Invalid JSON: ", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+	room.Clients = make(map[*types.Client]*types.ClientInfo)
+	room.Bus = types.NewEventBus()
 
 	err = h.store.CreateRoom(room)
 	if err != nil {
@@ -80,7 +78,7 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go room.Run();
+	go room.Run()
 	hub.HubInstance.AddRoom(room.ChannelID, room.ID, room)
 	utils.SendJSONResponse(w, http.StatusCreated, room)
 }
