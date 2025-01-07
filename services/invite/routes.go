@@ -126,7 +126,7 @@ func isInviteValid(invite *types.Invite) bool {
 		return false
 	}
 
-	if !now.After(invite.Expiration) {
+	if now.After(invite.Expiration) {
 		return false
 	}
 
