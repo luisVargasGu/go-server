@@ -137,7 +137,9 @@ func (r *Room) handleUnregister(client *Client) {
 }
 
 func (r *Room) ToResponse() RoomInfoMessage {
-	users := make([]UserInfo, 0, len(r.Clients))
+	// Use a map to track unique user IDs
+	userMap := make(map[string]UserInfo)
+
 	for client, info := range r.Clients {
 		var avatar string
 		if len(client.Avatar) > 0 {
@@ -149,7 +151,9 @@ func (r *Room) ToResponse() RoomInfoMessage {
 			tracks = append(tracks, *trackInfo)
 		}
 
-		users = append(users, UserInfo{
+		// Check if this user ID is already in the map
+		// If it exists, only replace it if this client is more recent or has active media
+		userInfo := UserInfo{
 			ID:              client.ID,
 			Name:            client.Username,
 			Avatar:          avatar,
@@ -157,7 +161,20 @@ func (r *Room) ToResponse() RoomInfoMessage {
 			IsVideoEnabled:  client.VideoEnabled,
 			IsScreenEnabled: client.ScreenEnabled,
 			Tracks:          tracks,
-		})
+		}
+
+		// Only add this user if we haven't seen this ID before or
+		// if this client has active media tracks while the previous one doesn't
+		existing, exists := userMap[client.ID]
+		if !exists || (len(tracks) > 0 && len(existing.Tracks) == 0) {
+			userMap[client.ID] = userInfo
+		}
+	}
+
+	// Convert map to slice
+	users := make([]UserInfo, 0, len(userMap))
+	for _, userInfo := range userMap {
+		users = append(users, userInfo)
 	}
 
 	return RoomInfoMessage{
@@ -325,14 +342,58 @@ func (r *Room) signalPeerConnections() {
 
 	attemptSync := func() (tryAgain bool) {
 		for client, clientInfo := range r.Clients {
-			log.Println("Creating Offer to: ", client.ID)
-			if client.PeerConnection.ConnectionState() == webrtc.PeerConnectionStateClosed {
+			if client.PeerConnection == nil {
+				log.Printf("Client %s has no PeerConnection, skipping", client.ID)
+				continue
+			}
+
+			// Check connection and signaling states
+			connectionState := client.PeerConnection.ConnectionState()
+			signalingState := client.PeerConnection.SignalingState()
+			log.Printf("Client %s: Connection state: %s, Signaling state: %s",
+				client.ID, connectionState.String(), signalingState.String())
+
+			// Skip if connection is failed or closed
+			if connectionState == webrtc.PeerConnectionStateClosed ||
+				connectionState == webrtc.PeerConnectionStateFailed {
+				log.Printf("Client %s connection closed or failed, cleaning up", client.ID)
 				client.mu.Lock()
+				if client.PeerConnection != nil {
+					if err := client.PeerConnection.Close(); err != nil {
+						log.Printf("Error closing peer connection for client %s: %v", client.ID, err)
+					}
+				}
 				clientInfo.Connected = false
 				clientInfo.MediaTracks = make(map[string]*TrackInfo)
 				client.PeerConnection = nil
 				client.mu.Unlock()
 				return true
+			}
+
+			// IMPORTANT: Do not create offers if already in a connected state
+			// This prevents role conflicts during the DTLS handshake
+			if connectionState == webrtc.PeerConnectionStateConnected {
+				log.Printf("Client %s already connected, skipping offer creation", client.ID)
+				continue
+			}
+
+			// Skip if we're waiting for an answer (have-local-offer state)
+			if signalingState == webrtc.SignalingStateHaveLocalOffer {
+				log.Printf("Client %s is in have-local-offer state, waiting for answer", client.ID)
+				continue
+			}
+
+			// Skip if signaling state is not stable
+			if signalingState != webrtc.SignalingStateStable {
+				log.Printf("Client %s is in %s state, skipping offer creation",
+					client.ID, signalingState.String())
+				continue
+			}
+
+			// Skip if this client is the answerer (let the frontend be the offerer)
+			if client.IsAnswerer {
+				log.Printf("Client %s is designated as answerer, skipping offer creation", client.ID)
+				continue
 			}
 
 			// Map to track which senders or receivers are already accounted for
@@ -380,6 +441,7 @@ func (r *Room) signalPeerConnections() {
 			}
 
 			// Add missing tracks by checking StreamID and TrackID
+			tracksAdded := false
 			for _, trackInfo := range trackLocals.tracks {
 				if _, ok := existingStreamIDs[trackInfo.StreamID()]; !ok {
 					log.Println("Adding new track with StreamID:", trackInfo.StreamID())
@@ -387,20 +449,42 @@ func (r *Room) signalPeerConnections() {
 						log.Println("Error adding track:", err)
 						return true
 					}
+					tracksAdded = true
 				}
 			}
 
+			// Only create offers for initial setup or if tracks were added (renegotiation)
+			if !tracksAdded && connectionState != webrtc.PeerConnectionStateNew {
+				log.Printf("No tracks added and not in new state, skipping offer for client %s", client.ID)
+				continue
+			}
+
+			// Check signaling state again (might have changed after adding tracks)
+			if client.PeerConnection.SignalingState() != webrtc.SignalingStateStable {
+				log.Printf("Client %s: signaling state changed to %s after track changes, skipping offer",
+					client.ID, client.PeerConnection.SignalingState().String())
+				continue
+			}
+
+			log.Printf("Creating offer for client: %s", client.ID)
 			offer, err := client.PeerConnection.CreateOffer(nil)
 			if err != nil {
+				log.Printf("Error creating offer for client %s: %v", client.ID, err)
 				return true
 			}
 
 			if err = client.PeerConnection.SetLocalDescription(offer); err != nil {
+				log.Printf("Error setting local description for client %s: %v", client.ID, err)
+				// If the issue is that we're already in have-local-offer state, don't retry immediately
+				if err.Error() == "invalid state: already have local offer" {
+					continue
+				}
 				return true
 			}
 
 			clientID, err := strconv.Atoi(client.ID)
 			if err != nil {
+				log.Printf("Error parsing client ID %s: %v", client.ID, err)
 				return true
 			}
 			offerMessage := Message{
@@ -408,17 +492,22 @@ func (r *Room) signalPeerConnections() {
 				SenderID: clientID,
 				Offer:    &offer,
 			}
+
+			// Send room state update
 			client.Send <- utils.Marshal(r.ToResponse())
 
+			// Send the offer
+			log.Printf("Sending offer to client: %s", client.ID)
 			sendToClient(r, client, utils.Marshal(offerMessage))
 		}
 
-		return
+		return false
 	}
 
 	for syncAttempt := 0; ; syncAttempt++ {
 		if syncAttempt == 25 {
 			// Release the lock and attempt a sync in 3 seconds. We might be blocking a RemoveTrack or AddTrack
+			log.Println("Max sync attempts reached, scheduling retry in 3 seconds")
 			go func() {
 				time.Sleep(time.Second * 3)
 				r.signalPeerConnections()
@@ -449,6 +538,11 @@ func (r *Room) handleWebRTCOffer(msg Message) {
 		log.Printf("PeerConnection does not exist for client %d. Cannot renegotiate.", senderID)
 		return
 	}
+
+	// Mark this client as an answerer (frontend is the offerer)
+	// This prevents us from sending offers to this client in signalPeerConnections
+	sender.IsAnswerer = true
+	log.Printf("Client %d marked as answerer (frontend is offerer)", senderID)
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
@@ -594,7 +688,9 @@ func addTrack(r *Room, t *webrtc.TrackRemote) *webrtc.TrackLocalStaticRTP {
 	trackLocals.mu.Lock()
 	defer func() {
 		trackLocals.mu.Unlock()
-		r.signalPeerConnections()
+		// Don't automatically signal peer connections here - this could cause renegotiation issues
+		// Instead, let the frontend initiate renegotiation when needed
+		// r.signalPeerConnections()
 	}()
 
 	trackLocal, err := webrtc.NewTrackLocalStaticRTP(t.Codec().RTPCodecCapability, t.ID(), t.StreamID())
@@ -616,7 +712,9 @@ func removeTrack(r *Room, client *Client, t *webrtc.TrackLocalStaticRTP) {
 	defer func() {
 		r.mu.Unlock()
 		trackLocals.mu.Unlock()
-		r.signalPeerConnections()
+		// Don't automatically signal peer connections here
+		// This prevents unwanted offers after track removal
+		// Instead, let the frontend handle renegotiation
 	}()
 
 	if info != nil {

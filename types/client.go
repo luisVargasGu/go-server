@@ -32,6 +32,7 @@ type Client struct {
 	MicEnabled          bool
 	VideoEnabled        bool
 	ScreenEnabled       bool
+	IsAnswerer          bool
 }
 
 func (c *Client) ReadMessages(room *Room, store MessageStore) {
